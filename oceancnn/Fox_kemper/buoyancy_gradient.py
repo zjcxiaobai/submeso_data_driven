@@ -1,4 +1,7 @@
-
+import xarray as xr
+import numpy as np
+import make_grid
+import gsw
 
 def buo_coarse(
     ds_grid: xr.Dataset,
@@ -49,4 +52,26 @@ def buo_coarse(
     wetV = ds["hFacS"] > 0
     dbdx_u = (grid.diff(b, "X") / ds["DXC"]).where(wetU)                   # (k,j,i_g)
     dbdy_v = (grid.diff(b, "Y", boundary=boundary_Y) / ds["DYC"]).where(wetV)  # (k,j_g,i)
-    return b, dbdx_u, dbdy_v
+    # Conservatively bring face-gradients to centers (weight by face wetness)
+    # X: average adjacent U-faces; Y: average adjacent V-faces
+    wU_c = grid.interp(wetU.astype(b.dtype), "X")  # (k,j,i) in {0,0.5,1}
+    wV_c = grid.interp(wetV.astype(b.dtype), "Y")  # (k,j,i)
+
+    dbdx_c_num = grid.interp(dbdx_u.fillna(0.0), "X")
+    dbdy_c_num = grid.interp(dbdy_v.fillna(0.0), "Y")
+
+    dbdx_c = xr.where(wU_c > 0, dbdx_c_num / xr.where(wU_c > 0, wU_c, 1.0), np.nan)
+    dbdy_c = xr.where(wV_c > 0, dbdy_c_num / xr.where(wV_c > 0, wV_c, 1.0), np.nan)
+
+    # Center wet mask for final fields
+    wetC = ds["hFacC"] > 0
+    dbdx_c = dbdx_c.where(wetC)
+    dbdy_c = dbdy_c.where(wetC)
+
+    # Magnitude |∇b| = sqrt((∂b/∂x)^2 + (∂b/∂y)^2)
+    b_grad = xr.apply_ufunc(np.hypot, dbdx_c, dbdy_c).where(wetC)
+
+    # --- nice names/attrs ---
+    b_grad.name = "buoyancy_gradient"
+    
+    return b, b_grad, dbdx_u, dbdy_v
