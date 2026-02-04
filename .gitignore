@@ -4,6 +4,7 @@ runs/
 data/
 scratch/
 *.npy
+*.npz
 *.pt
 *.pth
 
