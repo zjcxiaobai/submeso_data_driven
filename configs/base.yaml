@@ -1,1 +1,41 @@
+project: MITgcm_CNN
+
+seed: 123
+device: auto
+
+data:
+  x_path: X.npy
+  y_path: y.npy
+  batch_size: 32
+  num_workers: 8
+  pin_memory: true
+
+split:
+  type: time_ordered   # shuffle | time_ordered
+  fractions: [0.7, 0.1, 0.2]
+  gap_days: 365        # only used for time_ordered splits (0 means none)
+
+normalize:
+  enabled: true
+  method: zscore       # zscore | minmax | none
+
+model:
+  name: unet_2en2de_2cnn
+  params:
+    in_channels: 5
+    out_channels: 1
+    base_filters: 128
+    dropout_2d: 0
+
+train:
+  epochs: 100
+  lr: 0.0003
+  weight_decay: 0.0
+  grad_clip: 1.0
+  amp: false
+  save_every: 1
+
+loss:
+  name: mse            # mse | huber | l1
+  params: {}
 
