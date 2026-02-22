@@ -4,8 +4,8 @@ seed: 123
 device: auto
 
 data:
-  x_path: X.npy
-  y_path: y.npy
+  x_path: /scratch/jczhang/submeso_data_driven/scr/data/X.npy   # put real absolute path
+  y_path: /scratch/jczhang/submeso_data_driven/scr/data/y.npy
   batch_size: 32
   num_workers: 8
   pin_memory: true
@@ -38,4 +38,14 @@ train:
 loss:
   name: mse            # mse | huber | l1
   params: {}
+
+
+sequence:
+  enabled: true
+  length: 8
+
+
+
+
+
 
