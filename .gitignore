@@ -11,8 +11,10 @@ data/**
 check_point/
 outputs/
 predictions/
-
-
+src/utils/old_fun/
+slurm-*.out
+configs/test_model/
+configs/test_T_sensitivity/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
