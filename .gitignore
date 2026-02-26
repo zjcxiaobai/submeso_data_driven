@@ -8,6 +8,10 @@ scratch/
 *.pt
 *.pth
 data/**
+check_point/
+outputs/
+predictions/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
