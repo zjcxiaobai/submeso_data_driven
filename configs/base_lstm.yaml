@@ -1,0 +1,76 @@
+seed: 123
+deterministic: false
+
+task:
+  mode: "lstm"          # "unet" or "lstm"
+
+data:
+  data_dir: "/scratch/jczhang/submeso_data_driven/src/data/k12"
+  x_name: "X.npy"
+  y_name: "y.npy"
+  max_samples: null     # set an int for debugging (e.g., 4000) or null
+
+split:
+  mode: "time_ordered"  # "time_ordered" or "random"
+  frac_train: 0.8
+  frac_skip: 0.0
+  frac_val: 0.1
+  frac_test: 0.1
+
+window:
+  T: 14
+  stride: 1
+  target: "last"        # "last" or "next"
+
+loader:
+  batch_size: 64
+  num_workers: 8
+  shuffle_train: true
+
+norm:
+  normalize_x: true
+  normalize_y: true
+
+model:
+  input_channels: null  # null => infer from X.shape[1]
+  head_channel: 1
+  base: 128
+  kernel_size: 3
+  activation: "SiLU"
+  batch_norm: "bn"
+  dropout_2D: 0.1
+  lstm_dropout: 0.1
+
+train:
+  epochs: 200
+
+optim:
+  name: "AdamW"
+  lr: 3.0e-4
+  weight_decay: 0.0
+  grad_clip: 1.0
+
+scheduler:
+  use: true
+  factor: 0.5
+  patience: 5
+  min_lr: 1.0e-6
+
+loss:
+  name: "huber"         # "huber" or "mse"
+  huber_beta: 0.5
+
+early_stop:
+  patience: 10
+  min_delta: 1.0e-6
+
+ckpt:
+  dir: "checkpoints"
+  save_every: 1
+  resume: false
+  latest_name: "latest_unet_convlstm.pt"
+  best_name: "best_unet_convlstm.pt"
+
+output:
+  dir: "outputs"            # root output folder
+  run_name: 1            # if null -> auto timestamp
