@@ -3,10 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Literal, Optional
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
 class ConvLSTMCell(nn.Module):
     """
     ConvLSTM cell.
@@ -54,7 +50,7 @@ class ConvLSTMCell(nn.Module):
 class BottleneckConvLSTM(nn.Module):
     """
     Runs ConvLSTM over time on bottleneck feature maps.
-    Input:  x3_seq (B, T, Cb, Hb, Wb)
+    Input:  x_seq (B, T, Cb, Hb, Wb)
     Output: h_last (B, Chid, Hb, Wb)   <-- rewritten bottleneck features
     """
     def __init__(self, in_channels, hidden_channels=None, kernel_size=3):
@@ -63,18 +59,18 @@ class BottleneckConvLSTM(nn.Module):
             hidden_channels = in_channels  # common default: keep same channels
         self.cell = ConvLSTMCell(in_channels, hidden_channels, kernel_size=kernel_size)
 
-    def forward(self, x3_seq):
-        B, T, C, H, W = x3_seq.shape
-        device = x3_seq.device
-        dtype = x3_seq.dtype
-
+    def forward(self, x_seq):
+        B, T, C, H, W = x_seq.shape
+        device = x_seq.device
+        dtype = x_seq.dtype
+    
         h, c = self.cell.init_state(B, (H, W), device=device, dtype=dtype)
-
+    
         for t in range(T):
-            x_t = x3_seq[:, t]  # (B, C, H, W)
+            x_t = x_seq[:, t]
             h, c = self.cell(x_t, (h, c))
-
-        return h  # last hidden state
+    
+        return h
 
 
 # convolutional block
@@ -224,13 +220,13 @@ class Up(nn.Module):
 
 class UNetPhysDepth1(nn.Module):
     """
-    Minimal U-Net (2 down, 2 up) using your conv_block everywhere.
+    Minimal U-Net (3 down, 3 up) using your conv_block everywhere.
     Input : (B, input_channels, 88, 58) OR (B, T, input_channels, 88, 58)
     Output: (B, head_channel,  88, 58)
     """
     def __init__(
         self,
-        input_channels: int = 5,
+        input_channels: int = 7,
         head_channel: int = 1,
         base: int = 32,
         kernel_size: int = 3,
@@ -240,9 +236,6 @@ class UNetPhysDepth1(nn.Module):
 
         # --- LSTM knobs (safe defaults) ---
         use_lstm: bool = True,
-        lstm_in_dim: int = 256,
-        lstm_hidden: int = 512,
-        lstm_layers: int = 1,
         lstm_dropout: float = 0.0,
     ):
         super().__init__()
@@ -324,53 +317,47 @@ class UNetPhysDepth1(nn.Module):
         self.head = nn.Conv2d(base, head_channel, kernel_size=1, bias=True)
 
     def forward(self, x):
-        # Backward compatible: accept (B,C,H,W) or (B,T,C,H,W)
+        # Accept (B,C,H,W) or (B,T,C,H,W)
         if x.dim() == 4:
-            # Original behavior (no temporal modeling)
             x1 = self.enc1(x)
             x2 = self.down1(x1)
             x3 = self.down2(x2)
             x4 = self.down3(x3)
-
+    
             x  = self.up3(x4, x3)
             x  = self.up2(x,  x2)
+            x  = self.up1(x,  x1)
             y  = self.head(x)
             return y
-
+    
         if x.dim() != 5:
             raise ValueError(f"Expected x dim 4 or 5, got {x.dim()} with shape {tuple(x.shape)}")
-
+    
         # Sequence path: x is (B, T, C, H, W)
         B, T, C, H, W = x.shape
-
-        x1_list, x2_list, x3_list, x4_list = [], [], [], []
+    
+        x4_list = []
+        x1_last = x2_last = x3_last = None
+    
         for t in range(T):
             xt = x[:, t]
-            x1 = self.enc1(xt)        # (B, B, 88, 58)
-            x2 = self.down1(x1)       # (B, 2B, 44, 29)
-            x3 = self.down2(x2)       # (B, 4B, 22, 14)
-            x4 = self.down3(x3)       # (B, 8B, 11, 7)
-            x1_list.append(x1)
-            x2_list.append(x2)
-            x3_list.append(x3)
+            x1 = self.enc1(xt)
+            x2 = self.down1(x1)
+            x3 = self.down2(x2)
+            x4 = self.down3(x3)
             x4_list.append(x4)
-
-
-        x1_last = x1_list[-1]
-        x2_last = x2_list[-1]
-        x3_last_skip = x3_list[-1]          # skip for up3
-        x4_seq = torch.stack(x4_list, dim=1)  # (B, T, 8B, 11, 7)
-
+            x1_last, x2_last, x3_last = x1, x2, x3
+    
+        x4_seq = torch.stack(x4_list, dim=1)  # (B,T,8B,Hb,Wb)
+    
         if self.use_lstm:
-            x4_last = self.mid_lstm(x4_seq)      # (B, 8B, 11, 7)
+            x4_last = self.mid_lstm(x4_seq)
             x4_last = self.lstm_dropout(x4_last)
         else:
             x4_last = x4_seq[:, -1]
-
-        x = self.up3(x4_last, x3_last_skip)  # -> (B, 4B, 22, 14)
-        x = self.up2(x, x2_last)             # -> (B, 2B, 44, 29)
-        x = self.up1(x, x1_last)             # -> (B, B, 88, 58)
+    
+        x = self.up3(x4_last, x3_last)
+        x = self.up2(x, x2_last)
+        x = self.up1(x, x1_last)
         y = self.head(x)
-        return y
-
         return y
