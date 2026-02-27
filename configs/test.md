@@ -4,27 +4,22 @@ A structured record of comparison experiments and key results.
 
 ---
 
-## Table 1 — Equilibrium / Spin-up Diagnostics
-
-| Experiment ID | Run / Config | Diagnostic | Definition | Time Range / Sampling | Result / Notes |
-|---|---|---|---|---|---|
-| EQ-01 | 50km_noGM (MITgcm_50km_withoutGM) | Surface EKE | EKE = mean(0.5*(u'²+v'²)); u',v' = anomaly (current: domain-mean removed) | iters 0→2332800 step 25920 | EKE saved to `50km_noGM_eke.pkl`; plateau check TBD |
-| EQ-02 | TBD | TBD | TBD | TBD | TBD |
-
----
-
-## Table 2 — Physics Field Comparison (Snapshots / Statistics)
-
-| Experiment ID | Run A | Run B | Variable / Depth | Comparison Method | Result / Notes |
-|---|---|---|---|---|---|
-| PHY-01 | TBD | TBD | TBD | TBD (e.g., snapshot diff, mean/var, PDF, spectra) | TBD |
-| PHY-02 | TBD | TBD | TBD | TBD | TBD |
+## TablUNet VS UNet-LSTMosticonfigperimedata/ Cmodelagnpixel r2finclimate r2Samcomments / Notes |
+|---|---|---|---|--cfg_1|
+ one-layer, 5844witUNeturf0.5047n r0.9514ste7 features checcfg_2 |one layer, 5844EQ-UNet + LSTM T = 14| T0.5132| T0.9530| T7 features, the train is higher than UNet| T
+UNet-LSTM is better than UNet
+BD | TBD |
 
 ---
+5844 data VS 6454 datas | config ID | data | model | pixel r2 | climate r2 | comments | Result / Notes |
+|---|---| cfg_1 |  one-layer, 5844 | UNet | 0.5047 | 0.9514 | 7 features |
+| cfg_1 |  one layer, 6454 | UNet | 0.4565 | 0.9367 | 7 features | | TBD | TBD | TBD |128 filter VS 256 filterCo| config ID | data | model | pixel r2 | climate r2 | comments |E/etc.) | Result / Notes || cfg_1 |  one layer, 6454 | UNet 128| 0.4565 | 0.9367 | 7 features |
+| cfg_4 |  one layer, 6454 | UNet 256| 0.4771 | 0.9286 | 7 features |
 
-## Table 3 — ML / Parameterization Comparison (Model Skill)
+## Table 4 — Transpose Decoder VS Bilinear Decoder VS Pixel Shuffle Decoder
 
-| Experiment ID | Model / Method | Inputs → Target | Train/Test Split | Metrics (R²/MSE/etc.) | Result / Notes |
+| config ID | data | model | pixel r2 | climate r2 | comments |
 |---|---|---|---|---|---|
-| ML-01 | TBD | TBD | TBD (time-ordered? gap?) | TBD | TBD |
-| ML-02 | TBD | TBD | TBD | TBD | TBD |
+| cfg_4 |  one layer, 6454 | UNet 256| 0.4771 | 0.9286 | 7 features |
+| cfg_7 |  one layer, 6454 | UNet 256| 0.4867 | 0.9286 | 7 features |
+| cfg_5 |  one layer, 6454 | UNet 256| 0.4664 | 0.377 | 7 features |TBD | TBD | TBD | TBD | TBD |
