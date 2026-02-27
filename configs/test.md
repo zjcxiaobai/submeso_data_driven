@@ -7,7 +7,6 @@ A structured record of comparison experiments and key results.
 ## TablUNet VS UNet-LSTMosticonfigperimedata/ Cmodelagnpixel r2finclimate r2Samcomments / Notes |
 |---|---|---|---|--cfg_1|
  one-layer, 5844witUNeturf0.5047n r0.9514ste7 features checcfg_2 |one layer, 5844EQ-UNet + LSTM T = 14| T0.5132| T0.9530| T7 features, the train is higher than UNet| T
-UNet-LSTM is better than UNet
 BD | TBD |
 
 ---
