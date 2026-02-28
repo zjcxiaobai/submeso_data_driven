@@ -35,6 +35,6 @@ A structured record of comparison experiments and key results.
 
 | config ID | data              | model                     | pixel r2 | climate r2 | comments   |
 |---|---|---|---:|---:|---|
-| cfg_4 | one layer, 6454     | UNet (256, transpose)     | 0.4771   | 0.9286     | 7 features |
-| cfg_7 | one layer, 6454     | UNet (256, bilinear)      | 0.4867   | 0.9286     | 7 features |
-| cfg_5 | one layer, 6454     | UNet (256, pixel shuffle) | 0.4664   | 0.3770     | 7 features |TBD | TBD | TBD | TBD | TBD |
+| cfg_4 | one layer, 6454     | UNet (256, bilinear)     | 0.4771   | 0.9286     | 7 features |
+| cfg_7 | one layer, 6454     | UNet (256, pixel shuffle)      | 0.4867   | 0.9286     | 7 features |
+| cfg_5 | one layer, 6454     | UNet (256, transpose) | 0.4664   | 0.3770     | 7 features |TBD | TBD | TBD | TBD | TBD |
