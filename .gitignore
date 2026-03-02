@@ -1,12 +1,14 @@
 # not track
-check_points/
+check_point/
 runs/
 data/
 scratch/
 *.npy
 *.npz
+*.nc
 *.pt
 *.pth
+*.pkl
 data/**
 check_point/
 outputs/
