@@ -1,0 +1,243 @@
+device: cuda
+training samples: 3708
+skipped samples: 1
+validation samples: 463
+test samples: 463
+Sequence mode: T=4 | train=3705 val=460 test=460
+UNetPhysDepth1(
+  (enc1): DoubleConvPhys(
+    (net): Sequential(
+      (0): Sequential(
+        (0): Sequential(
+          (0): _HybridPad2d()
+          (1): Conv2d(8, 256, kernel_size=(3, 3), stride=(1, 1), bias=False)
+        )
+        (1): BatchNorm2d(256, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+        (2): SiLU()
+        (3): Dropout2d(p=0.1, inplace=False)
+      )
+      (1): Sequential(
+        (0): Sequential(
+          (0): _HybridPad2d()
+          (1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), bias=False)
+        )
+        (1): BatchNorm2d(256, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+        (2): SiLU()
+        (3): Dropout2d(p=0.1, inplace=False)
+      )
+    )
+  )
+  (down1): Down(
+    (pool): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (conv): DoubleConvPhys(
+      (net): Sequential(
+        (0): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(512, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+        (1): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(512, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+      )
+    )
+  )
+  (down2): Down(
+    (pool): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (conv): DoubleConvPhys(
+      (net): Sequential(
+        (0): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(512, 1024, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(1024, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+        (1): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(1024, 1024, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(1024, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+      )
+    )
+  )
+  (down3): Down(
+    (pool): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (conv): DoubleConvPhys(
+      (net): Sequential(
+        (0): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(1024, 2048, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(2048, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+        (1): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(2048, 2048, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(2048, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+      )
+    )
+  )
+  (mid_lstm): BottleneckConvLSTM(
+    (cell): ConvLSTMCell(
+      (conv): Conv2d(4096, 8192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (lstm_dropout): Dropout2d(p=0.3, inplace=False)
+  (up3): Up(
+    (conv): DoubleConvPhys(
+      (net): Sequential(
+        (0): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(3072, 1024, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(1024, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+        (1): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(1024, 1024, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(1024, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+      )
+    )
+  )
+  (up2): Up(
+    (conv): DoubleConvPhys(
+      (net): Sequential(
+        (0): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(1536, 512, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(512, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+        (1): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(512, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+      )
+    )
+  )
+  (up1): Up(
+    (conv): DoubleConvPhys(
+      (net): Sequential(
+        (0): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(768, 256, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(256, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+        (1): Sequential(
+          (0): Sequential(
+            (0): _HybridPad2d()
+            (1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), bias=False)
+          )
+          (1): BatchNorm2d(256, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
+          (2): SiLU()
+          (3): Dropout2d(p=0.1, inplace=False)
+        )
+      )
+    )
+  )
+  (head): Conv2d(256, 1, kernel_size=(1, 1), stride=(1, 1))
+)
+Model params: total=426,492,161 trainable=426,492,161
+Using Huber (SmoothL1) loss with beta=0.5
+Epoch    1/200 | loss=0.266675 | TRAIN MSE=0.794286 R2=+0.2056 imgR2=+0.2045 | VAL   MSE=0.603633 R2=+0.1424 imgR2=+0.1246 | lr=3.00e-04 | 40.5s
+  ✓ saved BEST
+Epoch    2/200 | loss=0.225051 | TRAIN MSE=0.674457 R2=+0.3254 imgR2=+0.3264 | VAL   MSE=0.504339 R2=+0.2834 imgR2=+0.2831 | lr=3.00e-04 | 36.0s
+  ✓ saved BEST
+Epoch    3/200 | loss=0.209623 | TRAIN MSE=0.621806 R2=+0.3781 imgR2=+0.3724 | VAL   MSE=0.536713 R2=+0.2374 imgR2=+0.2125 | lr=3.00e-04 | 35.9s
+Epoch    4/200 | loss=0.201684 | TRAIN MSE=0.536198 R2=+0.4637 imgR2=+0.4582 | VAL   MSE=0.431070 R2=+0.3875 imgR2=+0.3772 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch    5/200 | loss=0.195988 | TRAIN MSE=0.575667 R2=+0.4242 imgR2=+0.4052 | VAL   MSE=0.489427 R2=+0.3046 imgR2=+0.2753 | lr=3.00e-04 | 35.9s
+Epoch    6/200 | loss=0.192139 | TRAIN MSE=0.515585 R2=+0.4843 imgR2=+0.4791 | VAL   MSE=0.420569 R2=+0.4025 imgR2=+0.3904 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch    7/200 | loss=0.187680 | TRAIN MSE=0.461378 R2=+0.5385 imgR2=+0.5292 | VAL   MSE=0.385466 R2=+0.4523 imgR2=+0.4374 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch    8/200 | loss=0.183853 | TRAIN MSE=0.486712 R2=+0.5132 imgR2=+0.4968 | VAL   MSE=0.428559 R2=+0.3911 imgR2=+0.3630 | lr=3.00e-04 | 35.9s
+Epoch    9/200 | loss=0.182312 | TRAIN MSE=0.440529 R2=+0.5594 imgR2=+0.5484 | VAL   MSE=0.378500 R2=+0.4622 imgR2=+0.4457 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch   10/200 | loss=0.178697 | TRAIN MSE=0.425434 R2=+0.5745 imgR2=+0.5644 | VAL   MSE=0.368884 R2=+0.4759 imgR2=+0.4587 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch   11/200 | loss=0.174920 | TRAIN MSE=0.412007 R2=+0.5879 imgR2=+0.5760 | VAL   MSE=0.364605 R2=+0.4820 imgR2=+0.4642 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch   12/200 | loss=0.172492 | TRAIN MSE=0.390248 R2=+0.6097 imgR2=+0.5968 | VAL   MSE=0.356978 R2=+0.4928 imgR2=+0.4760 | lr=3.00e-04 | 36.0s
+  ✓ saved BEST
+Epoch   13/200 | loss=0.169660 | TRAIN MSE=0.405198 R2=+0.5947 imgR2=+0.5784 | VAL   MSE=0.374643 R2=+0.4677 imgR2=+0.4461 | lr=3.00e-04 | 35.9s
+Epoch   14/200 | loss=0.168281 | TRAIN MSE=0.380622 R2=+0.6193 imgR2=+0.6057 | VAL   MSE=0.352980 R2=+0.4985 imgR2=+0.4824 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch   15/200 | loss=0.165149 | TRAIN MSE=0.425604 R2=+0.5743 imgR2=+0.5421 | VAL   MSE=0.355642 R2=+0.4947 imgR2=+0.4693 | lr=3.00e-04 | 36.0s
+Epoch   16/200 | loss=0.162733 | TRAIN MSE=0.570331 R2=+0.4296 imgR2=+0.3381 | VAL   MSE=0.483239 R2=+0.3134 imgR2=+0.2279 | lr=3.00e-04 | 35.9s
+Epoch   17/200 | loss=0.161337 | TRAIN MSE=1.044841 R2=-0.0450 imgR2=-0.1964 | VAL   MSE=2.044832 R2=-1.9053 imgR2=-2.5868 | lr=3.00e-04 | 35.9s
+Epoch   18/200 | loss=0.159343 | TRAIN MSE=0.322355 R2=+0.6776 imgR2=+0.6628 | VAL   MSE=0.332966 R2=+0.5269 imgR2=+0.5068 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch   19/200 | loss=0.156275 | TRAIN MSE=0.319877 R2=+0.6801 imgR2=+0.6656 | VAL   MSE=0.335540 R2=+0.5233 imgR2=+0.5057 | lr=3.00e-04 | 35.9s
+Epoch   20/200 | loss=0.152942 | TRAIN MSE=0.318550 R2=+0.6814 imgR2=+0.6609 | VAL   MSE=0.329235 R2=+0.5322 imgR2=+0.5099 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch   21/200 | loss=0.151017 | TRAIN MSE=0.336855 R2=+0.6631 imgR2=+0.6420 | VAL   MSE=0.345467 R2=+0.5092 imgR2=+0.4893 | lr=3.00e-04 | 36.0s
+Epoch   22/200 | loss=0.148918 | TRAIN MSE=0.282208 R2=+0.7177 imgR2=+0.7019 | VAL   MSE=0.323610 R2=+0.5402 imgR2=+0.5183 | lr=3.00e-04 | 36.0s
+  ✓ saved BEST
+Epoch   23/200 | loss=0.148969 | TRAIN MSE=0.275852 R2=+0.7241 imgR2=+0.7091 | VAL   MSE=0.325140 R2=+0.5380 imgR2=+0.5183 | lr=3.00e-04 | 35.9s
+Epoch   24/200 | loss=0.146272 | TRAIN MSE=0.295849 R2=+0.7041 imgR2=+0.6830 | VAL   MSE=0.346057 R2=+0.5083 imgR2=+0.4774 | lr=3.00e-04 | 35.9s
+Epoch   25/200 | loss=0.143348 | TRAIN MSE=0.261464 R2=+0.7385 imgR2=+0.7219 | VAL   MSE=0.320294 R2=+0.5449 imgR2=+0.5213 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch   26/200 | loss=0.141473 | TRAIN MSE=0.250497 R2=+0.7495 imgR2=+0.7344 | VAL   MSE=0.321656 R2=+0.5430 imgR2=+0.5191 | lr=3.00e-04 | 35.9s
+Epoch   27/200 | loss=0.139422 | TRAIN MSE=0.254808 R2=+0.7451 imgR2=+0.7303 | VAL   MSE=0.327854 R2=+0.5342 imgR2=+0.5152 | lr=3.00e-04 | 35.9s
+Epoch   28/200 | loss=0.137363 | TRAIN MSE=0.236949 R2=+0.7630 imgR2=+0.7482 | VAL   MSE=0.321702 R2=+0.5429 imgR2=+0.5199 | lr=3.00e-04 | 36.0s
+Epoch   29/200 | loss=0.135956 | TRAIN MSE=0.230929 R2=+0.7690 imgR2=+0.7542 | VAL   MSE=0.315346 R2=+0.5520 imgR2=+0.5275 | lr=3.00e-04 | 35.9s
+  ✓ saved BEST
+Epoch   30/200 | loss=0.134102 | TRAIN MSE=0.227556 R2=+0.7724 imgR2=+0.7573 | VAL   MSE=0.321574 R2=+0.5431 imgR2=+0.5193 | lr=3.00e-04 | 36.0s
+Epoch   31/200 | loss=0.132073 | TRAIN MSE=0.214463 R2=+0.7855 imgR2=+0.7713 | VAL   MSE=0.318578 R2=+0.5474 imgR2=+0.5247 | lr=3.00e-04 | 35.9s
+Epoch   32/200 | loss=0.134413 | TRAIN MSE=0.241529 R2=+0.7584 imgR2=+0.7416 | VAL   MSE=0.323508 R2=+0.5404 imgR2=+0.5185 | lr=3.00e-04 | 36.0s
+Epoch   33/200 | loss=0.132294 | TRAIN MSE=0.215224 R2=+0.7847 imgR2=+0.7699 | VAL   MSE=0.320584 R2=+0.5445 imgR2=+0.5193 | lr=3.00e-04 | 35.9s
+Epoch   34/200 | loss=0.128603 | TRAIN MSE=0.212461 R2=+0.7875 imgR2=+0.7726 | VAL   MSE=0.321060 R2=+0.5438 imgR2=+0.5212 | lr=3.00e-04 | 36.0s
+Epoch   35/200 | loss=0.126359 | TRAIN MSE=0.198714 R2=+0.8012 imgR2=+0.7873 | VAL   MSE=0.315853 R2=+0.5512 imgR2=+0.5234 | lr=1.50e-04 | 36.0s
+Epoch   36/200 | loss=0.122291 | TRAIN MSE=0.188566 R2=+0.8114 imgR2=+0.7979 | VAL   MSE=0.315865 R2=+0.5512 imgR2=+0.5265 | lr=1.50e-04 | 36.0s
+Epoch   37/200 | loss=0.120616 | TRAIN MSE=0.183457 R2=+0.8165 imgR2=+0.8033 | VAL   MSE=0.317322 R2=+0.5491 imgR2=+0.5234 | lr=1.50e-04 | 36.0s
+Epoch   38/200 | loss=0.119407 | TRAIN MSE=0.177874 R2=+0.8221 imgR2=+0.8093 | VAL   MSE=0.317199 R2=+0.5493 imgR2=+0.5270 | lr=1.50e-04 | 36.0s
+Epoch   39/200 | loss=0.118510 | TRAIN MSE=0.177394 R2=+0.8226 imgR2=+0.8097 | VAL   MSE=0.318918 R2=+0.5469 imgR2=+0.5241 | lr=1.50e-04 | 36.0s
+Early stopping: no val MSE improvement for 10 epochs. Best epoch=29, best_val=0.315346
+==== TEST (best) ====
+TEST pixelMSE=0.370698 pixelR2=+0.5770 imageR2_mean=+0.5680 imageR2_median=+0.5638 (n_images=460, n_pixels=1442560)
