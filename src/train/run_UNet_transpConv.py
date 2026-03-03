@@ -11,15 +11,15 @@ import yaml
 import argparse
 from typing import Dict, Any
 # user defined 
-from src.utils.data_loader import (
+from src.utils.machine_learning.data_loader import (
     prepare_unet_dataloaders,
     prepare_unet_lstm_many_to_one_dataloaders,
 )
 from src.models.UNet_ConvLSTM_3En3De_transpConv import UNetPhysDepth1
-from src.utils._opt import _build_optimizer, _build_lr_scheduler
-from src.utils.cnn_device import _seed_everything, _select_device, _set_num_threads
-from src.utils.evaluation import eval_r2_suite
-from src.utils.save_pred import save_predictions_npy
+from src.utils.machine_learning._opt import _build_optimizer, _build_lr_scheduler
+from src.utils.machine_learning.cnn_device import _seed_everything, _select_device, _set_num_threads
+from src.utils.machine_learning.evaluation import eval_r2_suite
+from src.utils.machine_learning.save_pred import save_predictions_npy
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
