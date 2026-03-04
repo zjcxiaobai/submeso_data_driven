@@ -69,5 +69,5 @@ A structured record of comparison experiments and key results.
 
 | config ID | data              | model                     | pixel r2 | climate r2 | comments   |
 |---|---|---|---:|---:|---|
-| cfg_4 | one layer, 6454     | UNet (256) | 0.4771   | 0.9286     | 7 features |
+| cfg_11 | mld, 7087     | UNet (256) | 0.5663   | 0.9400     | 8 features, add kpphbl|
 | cfg_10 | mld, 7087    | UNet (256) | 0.5318   | 0.9083     | 7 features |
