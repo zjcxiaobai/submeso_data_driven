@@ -56,7 +56,7 @@ A structured record of comparison experiments and key results.
 
 ---
 
-## Mixed Layer Averaged - 7 features
+## Mixed Layer Averaged - 7 Features
 ---
 ### Table 7 — conf_9 is same as conf_2 but more test data, show how imageR2 varies with time
 
@@ -65,9 +65,17 @@ A structured record of comparison experiments and key results.
 | cfg_4 | one layer, 6454     | UNet (256) | 0.4771   | 0.9286     | 7 features |
 | cfg_10 | mld, 7087    | UNet (256) | 0.5318   | 0.9083     | 7 features |
 
-### Table 8 — with kpphbl VS no kpphbl
+---
+
+## Mixed Layer Averaged - More Features (kpphbl, Eta, b, buoyancy_gradient)
+---
+
+### Table 8 — feature sensitivity
 
 | config ID | data              | model                     | pixel r2 | climate r2 | comments   |
 |---|---|---|---:|---:|---|
-| cfg_11 | mld, 7087     | UNet (256) | 0.5663   | 0.9400     | 8 features, add kpphbl|
 | cfg_10 | mld, 7087    | UNet (256) | 0.5318   | 0.9083     | 7 features |
+| cfg_11 | mld, 7087     | UNet (256) | 0.5663   | 0.9400     | 8 features, add kpphbl|
+| cfg_11 | mld, 7087     | UNet (256) + pixel shuffel | 0.   | 0.     | 8 features, add kpphbl|
+| cfg_12 | mld, 6635     | UNet (256) | 0.5534   | 0.9225     | 9 features, add kpphbl, Eta|
+| cfg_12 | mld, 6635     | UNet (256) | 0.   | 0.     | 9 features, add kpphbl, buoyancy gradient|
