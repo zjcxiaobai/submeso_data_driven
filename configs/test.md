@@ -76,6 +76,6 @@ A structured record of comparison experiments and key results.
 |---|---|---|---:|---:|---|
 | cfg_10 | mld, 7087    | UNet (256) | 0.5318   | 0.9083     | 7 features |
 | cfg_11 | mld, 7087     | UNet (256) | 0.5663   | 0.9400     | 8 features, add kpphbl|
-| cfg_11 | mld, 7087     | UNet (256) + pixel shuffel | 0.   | 0.     | 8 features, add kpphbl|
+| cfg_13 | mld, 7087     | UNet (256) + pixel shuffel | 0.5722   | 0.9115 | 8 features, add kpphbl|
 | cfg_12 | mld, 6635     | UNet (256) | 0.5534   | 0.9225     | 9 features, add kpphbl, Eta|
-| cfg_12 | mld, 6635     | UNet (256) | 0.   | 0.     | 9 features, add kpphbl, buoyancy gradient|
+| cfg_12 | mld, 6635     | UNet (256) | 0.5412   | 0.9181     | 9 features, add kpphbl, buoyancy gradient|
