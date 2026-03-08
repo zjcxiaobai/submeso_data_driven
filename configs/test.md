@@ -58,7 +58,7 @@ A structured record of comparison experiments and key results.
 
 ## Mixed Layer Averaged - 7 Features
 ---
-### Table 7 — conf_9 is same as conf_2 but more test data, show how imageR2 varies with time
+### Table 7 — MLD average VS One Layer
 
 | config ID | data              | model                     | pixel r2 | climate r2 | comments   |
 |---|---|---|---:|---:|---|
@@ -78,4 +78,21 @@ A structured record of comparison experiments and key results.
 | cfg_11 | mld, 7087     | UNet (256) | 0.5663   | 0.9400     | 8 features, add kpphbl|
 | cfg_13 | mld, 7087     | UNet (256) + pixel shuffel | 0.5722   | 0.9115 | 8 features, add kpphbl|
 | cfg_12 | mld, 6635     | UNet (256) | 0.5534   | 0.9225     | 9 features, add kpphbl, Eta|
-| cfg_12 | mld, 6635     | UNet (256) | 0.5412   | 0.9181     | 9 features, add kpphbl, buoyancy gradient|
+| cfg_14 | mld, 6635     | UNet (256) | 0.5412   | 0.9181     | 9 features, add kpphbl, buoyancy gradient|
+
+### Table 9 — T sensitivity
+
+| config ID | data              | model                     | pixel r2 | climate r2 | comments   |
+|---|---|---|---:|---:|---|
+| cfg_13 | mld, 7087    | UNet (256) + pixel shuffel | 0.5722   | 0.9115 | 8 features, add kpphbl |
+| cfg_15 | mld, 7087    | UNet LSTM (256) + pixel shuffel + T = 1 | 0.5644   | 0.8941 | 8 features, add kpphbl|
+| cfg_16 | mld, 7087    | UNet LSTM (256) + pixel shuffel + T = 5 | 0.5703   | 0.9361 | 8 features, add kpphbl|
+| cfg_17 | mld, 7087    | UNet LSTM (256) + pixel shuffel + T = 9 | 0.5819   | 0.9375 | 8 features, add kpphbl|
+| cfg_18 | mld, 7087    | UNet LSTM (256) + pixel shuffel + T = 20 | 0.   | 0. | out of memory|
+
+### Table 10 — T sensitivity
+
+| config ID | data              | model                     | pixel r2 | climate r2 | comments   |
+|---|---|---|---:|---:|---|
+| cfg_17 | mld, 7087 , no asinh  | UNet LSTM (256) + pixel shuffel + T = 9 | 0.5819   | 0.9375 | 8 features, add kpphbl|
+| cfg_18 | mld, 7087 , with asinh  | UNet LSTM (256) + pixel shuffel + T = 9 | 0.   | 0. | 8 features, add kpphbl|
