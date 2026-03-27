@@ -5,13 +5,13 @@ A structured record of comparison experiments and key results.
 ## One Layer (k = 12) - 7 features
 ---
 
-### Table 1 — UNet vs UNet-LSTM
+### Table 1 — UNet-3 vs UNet-LSTM vs UNet-4
 
 | config ID | data              | model             | pixel r2 | climate r2 | comments                                  |
 |---|---|---|---:|---:|---|
-| cfg_1 | one layer, 5844     | UNet              | 0.5047   | 0.9514     | 7 features;UVWT&vorticity&strain&speed     |
+| cfg_1 | one layer, 5844     | UNet 3En3De             | 0.5047   | 0.9514     | 7 features;UVWT&vorticity&strain&speed     |
 | cfg_2 | one layer, 5844     | UNet + LSTM (T=14)| 0.5132   | 0.9530     | 7 features; train higher than UNet        |
-
+| cfg_19 | mld avg, 9014     | UNet 4En3De| 0.5562   | 0.9234     | 8 features with kpphbl, val r2 can reach 0.62       |
 ---
 
 ### Table 2 — 5844 data vs 6454 data
@@ -90,9 +90,9 @@ A structured record of comparison experiments and key results.
 | cfg_17 | mld, 7087    | UNet LSTM (256) + pixel shuffel + T = 9 | 0.5819   | 0.9375 | 8 features, add kpphbl|
 | cfg_18 | mld, 7087    | UNet LSTM (256) + pixel shuffel + T = 20 | 0.   | 0. | out of memory|
 
-### Table 10 — T sensitivity
+### Table 10 — Skewness process of target
 
 | config ID | data              | model                     | pixel r2 | climate r2 | comments   |
 |---|---|---|---:|---:|---|
 | cfg_17 | mld, 7087 , no asinh  | UNet LSTM (256) + pixel shuffel + T = 9 | 0.5819   | 0.9375 | 8 features, add kpphbl|
-| cfg_18 | mld, 7087 , with asinh  | UNet LSTM (256) + pixel shuffel + T = 9 | 0.   | 0. | 8 features, add kpphbl|
+| cfg_18 | mld, 7087 , with asinh  | UNet LSTM (256) + pixel shuffel + T = 9 | 0.5504  | 0.9393 | 8 features, add kpphbl|
