@@ -5,7 +5,7 @@ from typing import Dict, Literal, Optional
 
 class ConvLSTMCell(nn.Module):
     """
-    ConvLSTM cell.
+    ConvLSTM cell with Hybrid padding (periodic x, reflect y).
     Input:  x_t  (B, Cin, H, W)
     State: (h, c) both (B, Chid, H, W)
     """
@@ -14,23 +14,27 @@ class ConvLSTMCell(nn.Module):
         assert kernel_size % 2 == 1, "Use odd kernel so padding keeps H,W"
         self.in_channels = in_channels
         self.hidden_channels = hidden_channels
-        padding = kernel_size // 2
+        pad = kernel_size // 2
 
-        # One conv produces all 4 gates at once
+        # Hybrid pad BEFORE the conv, so conv uses padding=0
+        self.pad = _HybridPad2d(pad_x=pad, pad_y=pad)
+
+        # One conv produces all 4 gates at once (no internal padding)
         self.conv = nn.Conv2d(
             in_channels + hidden_channels,
             4 * hidden_channels,
             kernel_size=kernel_size,
-            padding=padding,
+            padding=0,
             bias=bias,
         )
 
     def forward(self, x, state):
         h, c = state  # (B, Chid, H, W)
-        cat = torch.cat([x, h], dim=1)  # (B, Cin+Chid, H, W)
-        gates = self.conv(cat)          # (B, 4*Chid, H, W)
-        i, f, o, g = torch.chunk(gates, 4, dim=1)
+        cat = torch.cat([x, h], dim=1)        # (B, Cin+Chid, H, W)
+        cat = self.pad(cat)                   # hybrid padded
+        gates = self.conv(cat)                # (B, 4*Chid, H, W)
 
+        i, f, o, g = torch.chunk(gates, 4, dim=1)
         i = torch.sigmoid(i)
         f = torch.sigmoid(f)
         o = torch.sigmoid(o)
@@ -207,24 +211,32 @@ class Down(nn.Module):
 class UpPixelShuffle(nn.Module):
     """
     Upsample by 2 using PixelShuffle, concat skip, then DoubleConvPhys.
+
+    Uses HybridPad2d before the upsampling conv so spatial sizes are preserved
+    and boundary conditions are consistent with the rest of the network.
     """
-    def __init__(self, in_ch_from_down, in_ch_from_skip, out_ch, **kwargs):
+    def __init__(self, in_ch_from_down: int, in_ch_from_skip: int, out_ch: int, **kwargs):
         super().__init__()
         r = 2  # upsample factor
 
-        # (B, in_ch_from_down, H, W) -> (B, out_ch*r*r, H, W) -> PixelShuffle -> (B, out_ch, 2H, 2W)
+        # (B, in_ch_from_down, H, W)
+        # -> HybridPad(1) + Conv3x3(no internal padding) keeps H,W
+        # -> (B, out_ch*r*r, H, W)
+        # -> PixelShuffle -> (B, out_ch, 2H, 2W)
         self.up = nn.Sequential(
-            nn.Conv2d(in_ch_from_down, out_ch * (r * r), kernel_size=3, bias=True),
+            _HybridPad2d(pad_x=1, pad_y=1),
+            nn.Conv2d(in_ch_from_down, out_ch * (r * r), kernel_size=3, padding=0, bias=True),
             nn.PixelShuffle(r),
         )
 
         # after concat: (out_ch + in_ch_from_skip) -> out_ch
+        # NOTE: DoubleConvPhys is assumed to already use conv_block -> _HybridPad2d internally
         self.conv = DoubleConvPhys(out_ch + in_ch_from_skip, out_ch, **kwargs)
 
-    def forward(self, x_down, x_skip):
+    def forward(self, x_down: torch.Tensor, x_skip: torch.Tensor) -> torch.Tensor:
         x_down = self.up(x_down)
 
-        # safety: ensure exact match (handles odd shapes)
+        # safety: ensure exact match (handles odd shapes / pooling rounding)
         if x_down.shape[-2:] != x_skip.shape[-2:]:
             x_down = F.interpolate(x_down, size=x_skip.shape[-2:], mode="bilinear", align_corners=False)
 
