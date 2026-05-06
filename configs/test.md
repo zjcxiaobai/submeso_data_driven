@@ -11,7 +11,8 @@ A structured record of comparison experiments and key results.
 |---|---|---|---:|---:|---|
 | cfg_1 | one layer, 5844     | UNet 3En3De             | 0.5047   | 0.9514     | 7 features;UVWT&vorticity&strain&speed     |
 | cfg_2 | one layer, 5844     | UNet + LSTM (T=14)| 0.5132   | 0.9530     | 7 features; train higher than UNet        |
-| cfg_19 | mld avg, 9014     | UNet 4En3De| 0.5562   | 0.9234     | 8 features with kpphbl, val r2 can reach 0.62       |
+| cfg_19 | mld avg, 9014     | UNet 4En4De| 0.5562   | 0.9234     | 8 features with kpphbl, val r2 can reach 0.62       |
+| cfg_20 | mld avg, 11180     | UNet 4En4De| 0.5195   | 0.9193     | 8 features with kpphbl, val r2 can reach 0.57      |
 ---
 
 ### Table 2 — 5844 data vs 6454 data
@@ -96,3 +97,25 @@ A structured record of comparison experiments and key results.
 |---|---|---|---:|---:|---|
 | cfg_17 | mld, 7087 , no asinh  | UNet LSTM (256) + pixel shuffel + T = 9 | 0.5819   | 0.9375 | 8 features, add kpphbl|
 | cfg_18 | mld, 7087 , with asinh  | UNet LSTM (256) + pixel shuffel + T = 9 | 0.5504  | 0.9393 | 8 features, add kpphbl|
+
+### Table 11 — Some Random Test
+
+| config ID | data              | model                     | pixel r2 | climate r2 | comments   |
+|---|---|---|---:|---:|---|
+| cfg_21 | mld, 11180 | UNet 4En4De| 0.4759   |  0.9334 |  8 features with kpphbl, dropout 0.2-0.1, learnrate schedule 5-3, 0.5-0.2 |
+| cfg_22 | mld, 11180 | UNet 4En4De| 0.5015  | 0.9249 | 8 features with kpphbl, dropout 0.2-0.3, learnrate schedule 3-5, 0.2-0.5|
+
+### Table 12 — Insights from Prof Kelp
+
+| config ID | data              | model                     | pixel r2 | climate r2 | comments   |
+|---|---|---|---:|---:|---|
+| cfg_23 | mld, 11180 | UNet 4En4De| 0.5191   |  0.8528 |  8 features with kpphbl, dropout 0.3, MAE |
+| cfg_26 | mld, 11180 | UNet 3En43De + T = 9| 0.5310   | 0.8466 | cfg_17, MAE, val can reach 0.58|
+
+### Table 12 — cfg_19 based - with and without T
+
+| config ID | data              | model                     | pixel r2 | climate r2 | comments   |
+|---|---|---|---:|---:|---|
+| cfg_20 | mld, 11180     | UNet 4En4De| 0.5195   | 0.9193     | cfg_19, more data, val r2 can reach 0.57|
+| cfg_24 | mld, 11180 | UNet 3En43De| 0.4224   |  0.8931 | cfg_19, without T|
+| cfg_25 | mld, 11180 | UNet 4En4De| 0.4133   |  0.8995 | cfg_19, without T|
