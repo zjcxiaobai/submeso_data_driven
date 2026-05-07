@@ -1,0 +1,7 @@
+
+
+this experiment aims to test whether turn off the wind will enhance the submesoscale fields or weak the submesoscale fields. 
+
+at time 0026604288, we turned off the wind, and run for hundreds of days, then compare the submesoscale heat flux with the simulation results which has the wind stress.
+
+We compared the submesoscale field after few hours when turned off the wind, few days, and 100 days, all the results shows that turning off the wind will only weak the submesoscale fields.
