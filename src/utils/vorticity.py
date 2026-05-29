@@ -1,141 +1,128 @@
 # codes for calculate the vorticity - match the vorticity.py
 # --------------------- modules ----------------------------------
-import os
 import sys
 from pathlib import Path
+
+import xarray as xr
+
 sys.path.append(str(Path.cwd().parent))
 from src.utils import make_grid
-from src.utils import build_coarse_grid
-from src.utils import read_mitgcm
-import xarray as xr
-import numpy as np
-from src.utils import coarsen_UVWTS
-from MITgcmutils import mds
-from src.utils import mld_avg
 # --------------------- vorticity function ----------------------------------
-# conservative vorticity (ζ = ∂v/∂x − ∂u/∂y) on coarse grid
-def _vorticity(
+
+def _require_variables(ds: xr.Dataset, names: tuple[str, ...]) -> None:
+    missing = [name for name in names if name not in ds]
+    if missing:
+        raise KeyError(f"Dataset is missing required variable(s): {missing}")
+
+
+def _require_dims(da: xr.DataArray, dims: tuple[str, ...], name: str) -> None:
+    missing = [dim for dim in dims if dim not in da.dims]
+    if missing:
+        raise ValueError(f"{name} is missing required dimension(s): {missing}; got dims {da.dims}")
+
+
+def vorticity(
     ds_grid: xr.Dataset,
     ds_ocean: xr.Dataset,
-    boundary_Y: str = "fill"
-) -> xr.DataArray:
+    u_name: str = "U",
+    v_name: str = "V",
+    hfac_u_name: str = "hFacW",
+    hfac_v_name: str = "hFacS",
+    hfac_c_name: str = "hFacC",
+    dx_u_name: str = "DXC",
+    dy_v_name: str = "DYC",
+    raz_name: str = "RAZ",
+    u_face_dim: str = "i_g",
+    v_face_dim: str = "j_g",
+    x_center_dim: str = "i",
+    y_center_dim: str = "j",
+    y_boundary: str = "fill",
+    output_name: str = "zeta",
+    return_corner: bool = False,
+) -> xr.DataArray | xr.Dataset:
     """
-    ζ (s^-1) on the coarse cell centers (k,j,i), using line-integral form:
+    Vertical relative vorticity at MITgcm tracer-cell centers.
 
-      Γ_cell = d/dx [ V̄ * DXG * hFacS ]  −  d/dy [ Ū * DYG * hFacW ]
-      ζ      = Γ_cell / RAC
+    The C-grid curl is first computed at zeta/corner points and then
+    interpolated to tracer centers:
+
+      zeta_G = (delta_x[V * DYC * hFacS] - delta_y[U * DXC * hFacW]) / RAZ
+      zeta   = interp_y(interp_x(zeta_G))
 
     Notes
     -----
-    • Ū is on U-faces (j,   i_g) and uses DYG, hFacW
-    • V̄ is on V-faces (j_g, i  ) and uses DXG, hFacS
-    • No DRF in horizontal curl (purely horizontal circulation per area)
-    • X is periodic; Y boundary handled by `boundary_Y` (usually "fill" for walls)
+    U is expected on (j, i_g), V on (j_g, i), hFacW/hFacS on the same
+    horizontal face grids, and RAZ on (j_g, i_g). X is periodic through the
+    local xgcm grid; Y uses ``y_boundary`` and is usually ``"fill"`` for walls.
     """
-    # Merge grid + coarse velocities (expects Ubar, Vbar in ds_ocean)
     ds = xr.merge([ds_grid, ds_ocean])
+    _require_variables(
+        ds,
+        (
+            u_name,
+            v_name,
+            hfac_u_name,
+            hfac_v_name,
+            hfac_c_name,
+            dx_u_name,
+            dy_v_name,
+            raz_name,
+        ),
+    )
+    _require_dims(ds[u_name], (y_center_dim, u_face_dim), u_name)
+    _require_dims(ds[v_name], (v_face_dim, x_center_dim), v_name)
+    _require_dims(ds[hfac_u_name], (y_center_dim, u_face_dim), hfac_u_name)
+    _require_dims(ds[hfac_v_name], (v_face_dim, x_center_dim), hfac_v_name)
+    _require_dims(ds[hfac_c_name], (y_center_dim, x_center_dim), hfac_c_name)
+    _require_dims(ds[dx_u_name], (y_center_dim, u_face_dim), dx_u_name)
+    _require_dims(ds[dy_v_name], (v_face_dim, x_center_dim), dy_v_name)
+    _require_dims(ds[raz_name], (v_face_dim, u_face_dim), raz_name)
+
     grid = make_grid.make_grid_periodic_x(ds)
-    # Edge-length-weighted face velocities (m^2/s)
-    maskS = (ds["hFacS"] > 0)   # (k, j_g, i)
-    maskW = (ds["hFacW"] > 0)   # (k, j,   i_g)
-    V_eff = xr.where(maskS, ds["V"], 0.0)
-    U_eff = xr.where(maskW, ds["U"], 0.0)
-    # flux
-    v_lenflux = V_eff * ds["DYC"]      # (… , k, j_g, i)
-    u_lenflux = U_eff * ds["DXC"]      # (… , k, j,   i_g)
-    # Circulation tendency to cell centers via finite differences
-    dVdx = grid.diff(v_lenflux, "X")                       # (… , k, j_g, i_g)
-    dUdy = grid.diff(u_lenflux, "Y", boundary=boundary_Y)  # (… , k, j_g, i_g)
-    wet  = ds["hFacC"] > 0  
-    # Stokes: ζ = (dVdx - dUdy) / RAZ   (RAC is center cell area)
-    zeta_G = (dVdx - dUdy) / ds["RAZ"]
-    zeta = grid.interp(grid.interp(zeta_G, "X", to="center"), "Y", to="center")
-    zeta.name = "vorticity_coarse_fluxform"
-    zeta.attrs.update(long_name="ζ (coarse, flux-form, conservative)", units="s^-1")
+
+    wet_u = ds[hfac_u_name] > 0
+    wet_v = ds[hfac_v_name] > 0
+    wet_c = ds[hfac_c_name] > 0
+
+    u_line = ds[u_name].where(wet_u, 0.0) * ds[dx_u_name] * ds[hfac_u_name]
+    v_line = ds[v_name].where(wet_v, 0.0) * ds[dy_v_name] * ds[hfac_v_name]
+
+    dvdx_line = grid.diff(v_line, "X")
+    dudy_line = grid.diff(u_line, "Y", boundary=y_boundary)
+
+    zeta_corner = ((dvdx_line - dudy_line) / ds[raz_name]).rename(f"{output_name}_corner")
+    zeta_corner.attrs.update(
+        long_name="vertical relative vorticity at zeta points",
+        units="s^-1",
+        y_boundary=y_boundary,
+    )
+
+    zeta = grid.interp(grid.interp(zeta_corner, "X", to="center"), "Y", to="center")
+    zeta = zeta.where(wet_c).rename(output_name)
+    zeta.attrs.update(
+        long_name="vertical relative vorticity interpolated to tracer-cell centers",
+        units="s^-1",
+        y_boundary=y_boundary,
+    )
+
+    if return_corner:
+        return xr.Dataset({zeta.name: zeta, zeta_corner.name: zeta_corner})
     return zeta
-# --------------------- main program ----------------------------------
-if __name__ == "__main__":
-    variable = 'zeta'
-    # average box
-    box_i = box_j = 10
-    # --------------------- MITgcm folder path ----------------------------------
-    path_scratch = '/scratch/jczhang/'
-    path_MITgcm = 'MITgcm_5km/MITgcm/verification/tutorial_reentrant_channel/run/'
-    grid_dir = path_scratch + path_MITgcm
-    
-    # --------------------- grid variable ----------------------------------
-    ds_fine = read_mitgcm.read_mitgrid_staggered(grid_dir)
-    ds_coarse = build_coarse_grid.build_coarse_grid_staggered(ds_fine,box_j=10, box_i=10)
-    
-    # --------------------- time variable ----------------------------------
-    # time parameters
-    # pickup start point: 3900096, end: 4945536, end: 5391360, end: 5577984
-    nStep1, nStep2, dS = 4945536, 5391360, 216
-    time_index = np.arange(nStep1, nStep2 + 1, dS, dtype=int)
-    num_data = time_index.size
-    print("Total data number is:", num_data)
-        
-    # initialization
-    data = []
 
-     # --------------------- data calculation ----------------------------------
-    for _ in range(len(time_index)):
-        # load velocity data
-        print("saved:", _ + 1)
-        U = read_mitgcm._ocean_var(grid_dir, "U", time_index[_], ("k","j","i_g"))
-        U_coarse = coarsen_UVWTS.coarse_field("U", U, ds_fine, box_j, box_i)
-        V = read_mitgcm._ocean_var(grid_dir, "V", time_index[_], ("k","j_g","i"))
-        V_coarse = coarsen_UVWTS.coarse_field("V", V, ds_fine, box_j, box_i)
-        ds_ocean = xr.Dataset(dict(U=U, V=V))
-        ds_ocean_c = xr.Dataset(dict(U=U_coarse, V=V_coarse))
 
-        data_sanpshot = vorticity_coarse(ds_coarse, ds_ocean_c, "fill")
-        
-        # kpphbl
-        diagMXL = mds.rdmds(path_scratch + path_MITgcm + 'Diags/' +'DiagMXL_2d', time_index[_])
-        kpphbl = xr.DataArray(diagMXL[1, :,:], dims = ("j","i"), name = "kpphbl")
-        kpphbl_coarse = coarsen_UVWTS.coarse_field("kpphbl", kpphbl, ds_fine, box_j, box_i)
-        data_coarse_mld = mld_avg.mld_avg(data_sanpshot, kpphbl_coarse, ds_coarse)
-        data.append(data_coarse_mld[2:118,1:59])
-    data_arr = np.stack(data, axis=0)
-    
-    # --------------------- save the data ----------------------------------
-    out_dir = path_scratch + 'data_5km/var_6000/'
-    os.makedirs(out_dir, exist_ok=True)
-    save_path_npz = os.path.join(out_dir, variable + '.npz')
-    
-    # if existing file, merge by time_index (new values win), then sort by time
-    if os.path.exists(save_path_npz):
-        with np.load(save_path_npz) as npz:
-            t_old = npz['time_index'].astype(np.int64)
-            x_old = npz['data'].astype(np.float32)
-        t_cat = np.concatenate([t_old, time_index])
-        x_cat = np.concatenate([x_old, data_arr], axis=0)
+def _vorticity(
+    ds_grid: xr.Dataset,
+    ds_ocean: xr.Dataset,
+    boundary_Y: str = "fill",
+) -> xr.DataArray:
+    """Backward-compatible wrapper for older notebooks/scripts."""
+    return vorticity(ds_grid, ds_ocean, y_boundary=boundary_Y, output_name="zeta")
 
-        # prefer NEW values on duplicates: unique over reversed indices
-        idx_rev = np.arange(t_cat.size - 1, -1, -1)
-        t_rev = t_cat[idx_rev]
-        _, first_rev_idx = np.unique(t_rev, return_index=True)
-        keep_rev = np.sort(first_rev_idx)
-        keep = idx_rev[keep_rev]
 
-        t_keep = t_cat[keep]
-        x_keep = x_cat[keep]
-        order = np.argsort(t_keep)
-        t_final = t_keep[order]
-        x_final = x_keep[order]
-    else:
-        # first time save
-        order = np.argsort(time_index)
-        t_final = time_index[order]
-        x_final = data_arr[order]
-
-    # save both arrays together
-    np.savez_compressed(save_path_npz, time_index=t_final.astype(np.int64), data=x_final.astype(np.float32))
-    print('Saved (appended) to', save_path_npz, 'dims:', x_final.shape, 'timesteps:', t_final.size)
-
-    # --------------------- check NANs ---------------------------------
-    has_nan = np.isnan(x_final).any()
-    num_nan = int(np.isnan(x_final).sum())
-    print("Contains NaN:", has_nan)
-    print("Number of NaNs:", num_nan)
+def vorticity_coarse(
+    ds_grid: xr.Dataset,
+    ds_ocean: xr.Dataset,
+    boundary_Y: str = "fill",
+) -> xr.DataArray:
+    """Backward-compatible coarse-grid name used by older scripts."""
+    return _vorticity(ds_grid, ds_ocean, boundary_Y=boundary_Y)
