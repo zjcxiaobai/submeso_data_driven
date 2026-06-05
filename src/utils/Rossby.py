@@ -18,8 +18,15 @@ def _require_variables(ds: xr.Dataset, names: tuple[str, ...]) -> None:
 
 def _center_wet_mask(ds_grid: xr.Dataset, hfac_c_name: str = "hFacC") -> xr.DataArray:
     wet = ds_grid[hfac_c_name] > 0
-    if set(wet.dims) - {"j", "i"}:
-        wet = wet.isel({dim: 0 for dim in wet.dims if dim not in {"j", "i"}})
+    extra_dims = [dim for dim in wet.dims if dim not in {"j", "i"}]
+    empty_dims = [dim for dim in extra_dims if wet.sizes[dim] == 0]
+    if empty_dims:
+        raise ValueError(
+            f"{hfac_c_name} has empty vertical/non-horizontal dimension(s): {empty_dims}. "
+            "Check that the selected vertical index is within the grid range."
+        )
+    if extra_dims:
+        wet = wet.isel({dim: 0 for dim in extra_dims})
     return wet
 
 

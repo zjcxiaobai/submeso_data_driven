@@ -1,159 +1,154 @@
-#### total Starin
-# the strain is defined by : 
-# strain = $\sqrt{(\frac{\partial u}{\partial x}-\frac{\partial v}{\partial y})^2+(\frac{\partial v}{\partial x}+\frac{\partial u}{\partial y})^2}$
+"""Horizontal strain-rate diagnostics on MITgcm C-grid data."""
 
-# --------------------- module ----------------------------------
-import os
-from src.utils import make_grid
-from src.utils import build_coarse_grid
-from src.utils import read_mitgcm
-import xarray as xr
+from __future__ import annotations
+
 import numpy as np
-from src.utils import coarsen_UVWTS
-from MITgcmutils import mds
 import xarray as xr
-from src.utils import mld_avg
 
-# ------------------------------ strain function -----------------------
+from src.utils import make_grid
+
+
+def _require_variables(ds: xr.Dataset, names: tuple[str, ...]) -> None:
+    missing = [name for name in names if name not in ds]
+    if missing:
+        raise KeyError(f"Dataset is missing required variable(s): {missing}")
+
+
+def _require_dims(da: xr.DataArray, dims: tuple[str, ...], name: str) -> None:
+    missing = [dim for dim in dims if dim not in da.dims]
+    if missing:
+        raise ValueError(f"{name} is missing required dimension(s): {missing}; got dims {da.dims}")
+
+
+def total_strain(
+    ds_grid: xr.Dataset,
+    ds_ocean: xr.Dataset,
+    u_name: str = "U",
+    v_name: str = "V",
+    hfac_u_name: str = "hFacW",
+    hfac_v_name: str = "hFacS",
+    hfac_c_name: str = "hFacC",
+    rac_name: str = "RAC",
+    raz_name: str = "RAZ",
+    drf_name: str = "DRF",
+    dy_u_name: str = "DYG",
+    dx_v_name: str = "DXG",
+    dx_u_name: str = "DXC",
+    dy_v_name: str = "DYC",
+    u_face_dim: str = "i_g",
+    v_face_dim: str = "j_g",
+    x_center_dim: str = "i",
+    y_center_dim: str = "j",
+    y_boundary: str = "fill",
+    output_name: str = "strain_magnitude",
+    return_components: bool = False,
+) -> xr.DataArray | xr.Dataset:
+    """
+    Total horizontal strain magnitude at MITgcm tracer-cell centers.
+
+    The returned strain is
+
+      ``sqrt((du/dx - dv/dy)^2 + (dv/dx + du/dy)^2)``.
+
+    Normal derivatives are computed conservatively at tracer centers using
+    volume flux differences. Cross derivatives are computed first at zeta
+    points using tangential line integrals, then interpolated to centers.
+    """
+    ds = xr.merge([ds_grid, ds_ocean])
+    _require_variables(
+        ds,
+        (
+            u_name,
+            v_name,
+            hfac_u_name,
+            hfac_v_name,
+            hfac_c_name,
+            rac_name,
+            raz_name,
+            drf_name,
+            dy_u_name,
+            dx_v_name,
+            dx_u_name,
+            dy_v_name,
+        ),
+    )
+    _require_dims(ds[u_name], ("k", y_center_dim, u_face_dim), u_name)
+    _require_dims(ds[v_name], ("k", v_face_dim, x_center_dim), v_name)
+    _require_dims(ds[hfac_u_name], ("k", y_center_dim, u_face_dim), hfac_u_name)
+    _require_dims(ds[hfac_v_name], ("k", v_face_dim, x_center_dim), hfac_v_name)
+    _require_dims(ds[hfac_c_name], ("k", y_center_dim, x_center_dim), hfac_c_name)
+    _require_dims(ds[rac_name], (y_center_dim, x_center_dim), rac_name)
+    _require_dims(ds[raz_name], (v_face_dim, u_face_dim), raz_name)
+    _require_dims(ds[drf_name], ("k",), drf_name)
+    _require_dims(ds[dy_u_name], (y_center_dim, u_face_dim), dy_u_name)
+    _require_dims(ds[dx_v_name], (v_face_dim, x_center_dim), dx_v_name)
+    _require_dims(ds[dx_u_name], (y_center_dim, u_face_dim), dx_u_name)
+    _require_dims(ds[dy_v_name], (v_face_dim, x_center_dim), dy_v_name)
+
+    grid = make_grid.make_grid_periodic_x(ds)
+
+    wet_u = ds[hfac_u_name] > 0
+    wet_v = ds[hfac_v_name] > 0
+    wet_c = ds[hfac_c_name] > 0
+
+    u = ds[u_name].where(wet_u, 0.0).fillna(0.0)
+    v = ds[v_name].where(wet_v, 0.0).fillna(0.0)
+    drf = ds[drf_name]
+
+    volume_c = (drf * ds[rac_name] * ds[hfac_c_name]).transpose("k", y_center_dim, x_center_dim)
+
+    u_normal_transport = u * ds[dy_u_name] * ds[hfac_u_name] * drf
+    v_normal_transport = v * ds[dx_v_name] * ds[hfac_v_name] * drf
+    dudx = grid.diff(u_normal_transport, "X") / volume_c
+    dvdy = grid.diff(v_normal_transport, "Y", boundary=y_boundary) / volume_c
+
+    u_tangential = u * ds[dx_u_name] * ds[hfac_u_name] * drf
+    v_tangential = v * ds[dy_v_name] * ds[hfac_v_name] * drf
+    corner_volume = drf * ds[raz_name]
+    dvdx_corner = grid.diff(v_tangential, "X") / corner_volume
+    dudy_corner = grid.diff(u_tangential, "Y", boundary=y_boundary) / corner_volume
+
+    dvdx = grid.interp(grid.interp(dvdx_corner, "X", to="center"), "Y", to="center")
+    dudy = grid.interp(grid.interp(dudy_corner, "X", to="center"), "Y", to="center")
+
+    normal_component = (dudx - dvdy).where(wet_c).rename("normal_strain")
+    shear_component = (dvdx + dudy).where(wet_c).rename("shear_strain")
+    strain = xr.apply_ufunc(np.hypot, normal_component, shear_component).where(wet_c).rename(output_name)
+
+    units = "s^-1"
+    normal_component.attrs.update(long_name="du/dx - dv/dy at tracer-cell centers", units=units, y_boundary=y_boundary)
+    shear_component.attrs.update(long_name="dv/dx + du/dy at tracer-cell centers", units=units, y_boundary=y_boundary)
+    strain.attrs.update(
+        long_name="horizontal total strain magnitude at tracer-cell centers",
+        units=units,
+        definition="sqrt((du/dx - dv/dy)^2 + (dv/dx + du/dy)^2)",
+        y_boundary=y_boundary,
+    )
+
+    if return_components:
+        return xr.Dataset(
+            {
+                strain.name: strain,
+                normal_component.name: normal_component,
+                shear_component.name: shear_component,
+            }
+        )
+    return strain
+
+
 def _total_strain(
     ds_grid: xr.Dataset,
     ds_ocean: xr.Dataset,
-    boundary_Y: str = "fill"
+    boundary_Y: str = "fill",
 ) -> xr.DataArray:
-    """
-    Flux-form strain on coarse grid, following the user's example pattern.
-    D_center : xr.DataArray
-        D = ∂u/∂x − ∂v/∂y at centers (k,j,i), units s^-1
-    S_center : xr.DataArray
-        S = ∂v/∂x + ∂u/∂y mapped to centers (k,j,i), units s^-1
-    Returns
-    -------
-    strain   : xr.DataArray
-        |S| = sqrt(D^2 + S^2) at centers (k,j,i), units s^-1
-    """
-    # merge grid + velocities
-    ds = xr.merge([ds_grid, ds_ocean])
-    # xgcm grid (periodic in X)
-    grid = make_grid.make_grid_periodic_x(ds)
-    # ---- collocate center metrics to faces ----
-    # ---- Volumes / masks at centers & corners ----
-    vol_c = ( 
-        ds["DRF"] * ds["RAC"]
-    ).transpose("k","j","i") * ds["hFacC"]
-    wetc = ds["hFacC"] > 0
-    # ---- Face-integrated fluxes (m^3/s) using face-coarsened velocities ----
-    U = ds["U"].fillna(0.0)     # (k,j,  i_g)
-    V = ds["V"].fillna(0.0)     # (k,j_g,i  )
-    # ----------------------------------------------------------------------------
-    # Normal components → give ∂u/∂x, ∂v/∂y at centers after diff
-    Fu_norm = ds["U"] * ds["DYG"] * ds["hFacW"] * ds["DRF"]          # (k,j,  i_g)
-    Fv_norm = ds["V"] * ds["DXG"] * ds["hFacS"] * ds["DRF"]          # (k,j_g,i  )
-    # ---- Normal derivatives: faces -> centers, then divide by VOLc ----
-    dUdx = grid.diff(Fu_norm, "X") / vol_c                               # (k,j,i)
-    dVdy = grid.diff(Fv_norm, "Y", boundary=boundary_Y) / vol_c          # (k,j,i)
-    
-    # Tangential components → give ∂u/∂y, ∂v/∂x after diff (first on corners)
-    Fu_tan  = ds["U"] * ds["DXC"] * ds["hFacW"] * ds["DRF"]         # (k,j,  i_g)
-    Fv_tan  = ds["V"] * ds["DYC"] * ds["hFacS"] * ds["DRF"]         # (k,j_g,i  )
-    # ---- Cross derivatives: faces -> corners, corners -> centers (conservative), then /VOLc ----
-    dVdx_G = grid.diff(Fv_tan, "X") / (ds["DRF"] * ds["RAZ"])       # (k,j_g,i_g)
-    dUdy_G = grid.diff(Fu_tan, "Y", boundary=boundary_Y) / (ds["DRF"] * ds["RAZ"])     # (k,j_g,i_g)
-    # Map corner → center
-    dUdy = grid.interp(grid.interp(dUdy_G, "X", to="center"), "Y", to="center")  # (k,j,i)
-    dVdx = grid.interp(grid.interp(dVdx_G, "X", to="center"), "Y", to="center")  # (k,j,i)
-    # ---- Assemble D, S and |S| at centers ----
-    D_center = (dUdx - dVdy).where(wetc).rename("D_center")
-    D_center.attrs.update(long_name="∂u/∂x − ∂v/∂y (center, flux-form)", units="s^-1")
+    """Backward-compatible wrapper for older scripts."""
+    return total_strain(ds_grid, ds_ocean, y_boundary=boundary_Y, output_name="strain_magnitude")
 
-    S_center = (dVdx + dUdy).where(wetc).rename("S_center")
-    S_center.attrs.update(long_name="∂v/∂x + ∂u/∂y (center, flux-form)", units="s^-1")
 
-    strain = xr.apply_ufunc(np.hypot, D_center, S_center).rename("strain_magnitude").where(wetc)
-    strain.attrs.update(long_name="|S| = sqrt[(∂u/∂x−∂v/∂y)^2 + (∂v/∂x+∂u/∂y)^2]", units="s^-1")
-    
-    return strain
-
-# --------------------- main program ----------------------------------
-if __name__ == "__main__":
-    variable = 'strain'
-    # average box
-    box_i = box_j = 10
-    # --------------------- MITgcm folder path ----------------------------------
-    path_scratch = '/scratch/jczhang/'
-    path_MITgcm = 'MITgcm_5km/MITgcm/verification/tutorial_reentrant_channel/run/'
-    grid_dir = path_scratch + path_MITgcm
-    
-    # --------------------- grid variable ----------------------------------
-    ds_fine = read_mitgcm.read_mitgrid_staggered(grid_dir)
-    ds_coarse = build_coarse_grid.build_coarse_grid_staggered(ds_fine,box_j=10, box_i=10)
-    
-    # --------------------- time variable ----------------------------------
-    # time parameters
-    # pickup start point: 3900096, end: 4945536, end: 5391360
-    nStep1, nStep2, dS = 4945536 + 216 * 4500, 6096384, 216
-    time_index = np.arange(nStep1, nStep2 + 1, dS, dtype=int)
-    num_data = time_index.size
-    print("Total data number is:", num_data)
-    
-    # initialization
-    data = []
-    for _ in range(len(time_index)):
-        # load velocity data
-        print("saved:", _ + 1)
-        U = read_mitgcm._ocean_var(grid_dir, "U", time_index[_], ("k","j","i_g"))
-        U_coarse = coarsen_UVWTS.coarse_field("U", U, ds_fine, box_j, box_i)
-        V = read_mitgcm._ocean_var(grid_dir, "V", time_index[_], ("k","j_g","i"))
-        V_coarse = coarsen_UVWTS.coarse_field("V", V, ds_fine, box_j, box_i)
-        ds_ocean = xr.Dataset(dict(U=U, V=V))
-        ds_ocean_c = xr.Dataset(dict(U=U_coarse, V=V_coarse))
-
-        data_sanpshot = total_strain_coarse(ds_coarse, ds_ocean_c, "fill")
-        
-        # kpphbl
-        diagMXL = mds.rdmds(path_scratch + path_MITgcm + 'Diags/' +'DiagMXL_2d', time_index[_])
-        kpphbl = xr.DataArray(diagMXL[1, :,:], dims = ("j","i"), name = "kpphbl")
-        kpphbl_coarse = coarsen_UVWTS.coarse_field("kpphbl", kpphbl, ds_fine, box_j, box_i)
-        data_coarse_mld = mld_avg.mld_avg(data_sanpshot, kpphbl_coarse, ds_coarse)
-        data.append(data_coarse_mld[2:118,1:59])
-
-    data_arr = np.stack(data, axis=0)
-    
-    # --------------------- save the data ----------------------------------
-    out_dir = path_scratch + 'data_5km/var_6000/'
-    os.makedirs(out_dir, exist_ok=True)
-    save_path_npz = os.path.join(out_dir, variable + '.npz')
-    # if existing file, merge by time_index (new values win), then sort by time
-    if os.path.exists(save_path_npz):
-        with np.load(save_path_npz) as npz:
-            t_old = npz['time_index'].astype(np.int64)
-            x_old = npz['data'].astype(np.float32)
-        t_cat = np.concatenate([t_old, time_index])
-        x_cat = np.concatenate([x_old, data_arr], axis=0)
-
-        # prefer NEW values on duplicates: unique over reversed indices
-        idx_rev = np.arange(t_cat.size - 1, -1, -1)
-        t_rev = t_cat[idx_rev]
-        _, first_rev_idx = np.unique(t_rev, return_index=True)
-        keep_rev = np.sort(first_rev_idx)
-        keep = idx_rev[keep_rev]
-
-        t_keep = t_cat[keep]
-        x_keep = x_cat[keep]
-        order = np.argsort(t_keep)
-        t_final = t_keep[order]
-        x_final = x_keep[order]
-    else:
-        # first time save
-        order = np.argsort(time_index)
-        t_final = time_index[order]
-        x_final = data_arr[order]
-
-    # save both arrays together
-    np.savez_compressed(save_path_npz, time_index=t_final.astype(np.int64), data=x_final.astype(np.float32))
-    print('Saved (appended) to', save_path_npz, 'dims:', x_final.shape, 'timesteps:', t_final.size)
-
-    # --------------------- check NANs ---------------------------------
-    has_nan = np.isnan(x_final).any()
-    num_nan = int(np.isnan(x_final).sum())
-    print("Contains NaN:", has_nan)
-    print("Number of NaNs:", num_nan)
+def total_strain_coarse(
+    ds_grid: xr.Dataset,
+    ds_ocean: xr.Dataset,
+    boundary_Y: str = "fill",
+) -> xr.DataArray:
+    """Backward-compatible coarse-grid name used by older notebooks/scripts."""
+    return _total_strain(ds_grid, ds_ocean, boundary_Y=boundary_Y)

@@ -1,135 +1,131 @@
-from src.utils import make_grid
-from src.utils import build_coarse_grid
-from src.utils import read_mitgcm
-import xarray as xr
+"""Coarsen MITgcm ocean variables onto the repo's staggered coarse grids."""
+
+from __future__ import annotations
+
 import numpy as np
+import xarray as xr
 
-def coarse_field(varname: str,
-                 da: xr.DataArray,
-                 ds_fine: xr.Dataset,     # fine static grid 
-                 box_j: int,
-                 box_i: int) -> xr.DataArray:
+
+_CENTER_TRACERS = {"theta", "t", "salt", "s"}
+_SURFACE_CENTER_FIELDS = {"kpphbl", "mld", "hbl", "eta", "ssh", "etabar"}
+
+
+def _require_dims(da: xr.DataArray, dims: tuple[str, ...], name: str) -> None:
+    if tuple(da.dims) != dims:
+        raise ValueError(f"{name} must have dims {dims}; got {da.dims}")
+
+
+def _require_grid_vars(ds_grid: xr.Dataset, names: tuple[str, ...]) -> None:
+    missing = [name for name in names if name not in ds_grid]
+    if missing:
+        raise KeyError(f"Fine grid is missing required variable(s): {missing}")
+
+
+def _validate_boxes(box_j: int, box_i: int) -> None:
+    if not isinstance(box_j, int) or not isinstance(box_i, int) or box_j <= 0 or box_i <= 0:
+        raise ValueError("box_j and box_i must be positive integers")
+
+
+def _as_ordinal(da: xr.DataArray) -> xr.DataArray:
+    """Drop auxiliary coordinates and replace dimension coordinates with 0..N-1."""
+    da = da.reset_coords(drop=True)
+    coords = {dim: xr.DataArray(np.arange(da.sizes[dim], dtype="int64"), dims=dim) for dim in da.dims}
+    return da.assign_coords(coords)
+
+
+def _safe_weighted_average(
+    values: xr.DataArray,
+    weights: xr.DataArray,
+    coarsen_dims: dict[str, int],
+    *,
+    fill_value: float = np.nan,
+) -> xr.DataArray:
+    masked_values = values.where(weights > 0, 0.0).fillna(0.0)
+    numerator = (masked_values * weights).coarsen(**coarsen_dims, boundary="trim").sum()
+    denominator = weights.coarsen(**coarsen_dims, boundary="trim").sum()
+    return xr.where(denominator > 0, numerator / denominator, fill_value)
+
+
+def _coarsen_u(da: xr.DataArray, ds_fine: xr.Dataset, box_j: int, box_i: int) -> xr.DataArray:
+    _require_dims(da, ("k", "j", "i_g"), "U")
+    weights = ds_fine["hFacW"] * ds_fine["DYG"]
+    coarse = _safe_weighted_average(da, weights, {"j": box_j}, fill_value=0.0)
+    coarse = coarse.isel(i_g=slice(0, None, box_i)).transpose("k", "j", "i_g").rename(da.name or "U")
+    return _as_ordinal(coarse)
+
+
+def _coarsen_v(da: xr.DataArray, ds_fine: xr.Dataset, box_j: int, box_i: int) -> xr.DataArray:
+    _require_dims(da, ("k", "j_g", "i"), "V")
+    weights = ds_fine["hFacS"] * ds_fine["DXG"]
+    coarse = _safe_weighted_average(da, weights, {"i": box_i}, fill_value=0.0)
+    coarse = coarse.isel(j_g=slice(0, None, box_j)).transpose("k", "j_g", "i").rename(da.name or "V")
+    return _as_ordinal(coarse)
+
+
+def _coarsen_w(da: xr.DataArray, ds_fine: xr.Dataset, box_j: int, box_i: int) -> xr.DataArray:
+    _require_dims(da, ("k_l", "j", "i"), "W")
+    upper = ds_fine["hFacC"]
+    lower = ds_fine["hFacC"].shift(k=-1, fill_value=0.0)
+    open_fraction = xr.apply_ufunc(np.minimum, upper, lower)
+    open_fraction = open_fraction.rename({"k": "k_l"}).assign_coords(k_l=da.coords.get("k_l", np.arange(da.sizes["k_l"])))
+    area = (open_fraction * ds_fine["RAC"]).astype("float64")
+    coarse = _safe_weighted_average(da, area, {"j": box_j, "i": box_i})
+    coarse = coarse.transpose("k_l", "j", "i").rename(da.name or "W")
+    return _as_ordinal(coarse)
+
+
+def _coarsen_center_3d(da: xr.DataArray, ds_fine: xr.Dataset, box_j: int, box_i: int) -> xr.DataArray:
+    _require_dims(da, ("k", "j", "i"), da.name or "center field")
+    weights = ds_fine["hFacC"] * ds_fine["RAC"] * ds_fine["DRF"]
+    coarse = _safe_weighted_average(da, weights, {"j": box_j, "i": box_i})
+    coarse = coarse.transpose("k", "j", "i").rename(da.name or "center_field")
+    return _as_ordinal(coarse)
+
+
+def _coarsen_surface_center(da: xr.DataArray, ds_fine: xr.Dataset, box_j: int, box_i: int) -> xr.DataArray:
+    _require_dims(da, ("j", "i"), da.name or "surface center field")
+    wet_surface = ds_fine["hFacC"].isel(k=0) > 0
+    weights = xr.where(wet_surface, ds_fine["RAC"], 0.0)
+    coarse = _safe_weighted_average(da, weights, {"j": box_j, "i": box_i})
+    coarse = coarse.transpose("j", "i").rename(da.name or "surface_center_field")
+    return _as_ordinal(coarse)
+
+
+def coarse_field(
+    varname: str,
+    da: xr.DataArray,
+    ds_fine: xr.Dataset,
+    box_j: int,
+    box_i: int,
+) -> xr.DataArray:
     """
-    varname:str
-    da: xarray, high-resolution data
-    ds_fine: xr dataset, high-resolution grid variables
-    box_j, box_i: average box in two dimensions
-    
-    Return a coarse snapshot of one variable at time index `t`.
-    Supported varname: 'U','V','W','Theta','Salt','T','S','kpphbl'
+    Coarsen one fine-grid MITgcm variable to a staggered coarse grid.
+
+    Parameters
+    ----------
+    varname
+        Variable family. Supported values are ``U``, ``V``, ``W``, ``Theta``/
+        ``T``, ``Salt``/``S``, ``kpphbl``/``mld``/``hbl``, and ``Eta``/``SSH``.
+    da
+        Fine-grid field with dimensions matching ``varname``.
+    ds_fine
+        Fine static grid from ``read_mitgcm.read_mitgrid_staggered``.
+    box_j, box_i
+        Coarse-cell size in fine-grid points.
     """
-    # make varname lower case
+    _validate_boxes(box_j, box_i)
+    _require_grid_vars(ds_fine, ("RAC", "DRF", "hFacC", "hFacW", "hFacS", "DXG", "DYG"))
+
     var = varname.lower()
-    
-    # weights / metrics (fine)
-    RAC  = ds_fine['RAC']                          # (j,i)
-    DRF  = ds_fine['DRF']                          # (k)
-    hFacC = ds_fine['hFacC']                       # (k,j,i)
-    hFacW = ds_fine['hFacW']                       # (k,j,i_g)
-    hFacS = ds_fine['hFacS']                       # (k,j_g,i)
-    DXG  = ds_fine['DXG']                          # (j_g,i)
-    DYG  = ds_fine['DYG']                          # (j,i_g)
-    # --- helper ---
-    def as_ordinal(da: xr.DataArray) -> xr.DataArray:
-        """Drop hitchhiking coords and replace each dim’s coordinate with 0..N-1."""
-        da = da.reset_coords(drop=True)
-        new_coords = {d: xr.DataArray(np.arange(da.sizes[d]), dims=d) for d in da.dims}
-        return da.assign_coords(**new_coords)
-    
-    # ================= U =================
-    if var in ('u',):
-        # check the dimension
-        if tuple(da.dims) != ('k','j','i_g'):
-            raise ValueError("U must have dims ('k','j','i_g').")
-        WU = (hFacW * DYG)  # face length (per unit height)
-        U = da.where(WU > 0, 0.0).fillna(0.0) # set WU<=0 to 0, and set nan to 0
-        # conservative average along j, then subsample i_g to coarse faces
-        num = (U * WU).coarsen(j=box_j, boundary="trim").sum()
-        den = (WU).coarsen(j=box_j, boundary="trim").sum()
-        U_avgj = xr.where(den > 0, num / den, 0.0) # if den > 0, num/den, if not, set 0
-        U_coarse = U_avgj.isel(i_g=slice(0, None, box_i))
-        U_coarse = as_ordinal(U_coarse) # normalize the dimension
-        return U_coarse
+    if var == "u":
+        return _coarsen_u(da, ds_fine, box_j, box_i)
+    if var == "v":
+        return _coarsen_v(da, ds_fine, box_j, box_i)
+    if var == "w":
+        return _coarsen_w(da, ds_fine, box_j, box_i)
+    if var in _CENTER_TRACERS:
+        return _coarsen_center_3d(da, ds_fine, box_j, box_i)
+    if var in _SURFACE_CENTER_FIELDS:
+        return _coarsen_surface_center(da, ds_fine, box_j, box_i)
 
-    # ================= V =================
-    if var in ('v',):
-        if tuple(da.dims) != ('k','j_g','i'):
-            raise ValueError("V must have dims ('k','j_g','i').")
-        WV = (hFacS * DXG)
-        V = da.where(WV > 0, 0.0).fillna(0.0)
-        num = (V * WV).coarsen(i=box_i, boundary="trim").sum()
-        den = (WV    ).coarsen(i=box_i, boundary="trim").sum()
-        V_avgi = xr.where(den > 0, num / den, 0.0)
-        V_coarse = V_avgi.isel(j_g=slice(0, None, box_j))
-        V_coarse = as_ordinal(V_coarse) # normalize the dimension
-        return V_coarse
-
-    # ================= W =================
-    if var in ('w',):
-        if tuple(da.dims) != ('k_l','j','i'):
-            raise ValueError("W must have dims ('k_l','j','i').")
-        # open area of vertical interface between layers at k_l:
-        # use min(hFacC(k), hFacC(k+1)) to represent open fraction on the face
-        upper = ds_fine.hFacC                                  # (k,j,i)
-        lower = ds_fine.hFacC.shift(k=-1, fill_value=0.0)      # (k+1,j,i), bottom filled as 0 (closed)
-        open_frac = xr.ufuncs.minimum(upper, lower).rename({'k': 'k_l'})  # (k_l,j,i), same length as k
-        Aface = (open_frac * RAC).astype('float32')
-        # Conservative horizonatl coarsening: average vertical transport, then divide by open area
-        num = (da.where(Aface > 0, 0.0).fillna(0.0) * Aface).coarsen(j=box_j, i=box_i, boundary="trim").sum()
-        den = Aface.coarsen(j=box_j, i=box_i, boundary="trim").sum()
-        W_coarse  = xr.where(den > 0, num / den, np.nan)
-        W_coarse = as_ordinal(W_coarse)
-        return W_coarse
-
-    # ================= Theta / Salt =================
-    if var in ('theta', 't', 'salt', 's'):
-        if tuple(da.dims) != ('k','j','i'):
-            raise ValueError("Theta/Salt must have dims ('k','j','i').")
-        # Volume-weighted horizontal coarsening per level (preserves tracer content)
-        w_vol = (hFacC * RAC * DRF)        # (k,j,i)
-        num = (da * w_vol).coarsen(j=box_j, i=box_i, boundary="trim").sum()
-        den = (w_vol    ).coarsen(j=box_j, i=box_i, boundary="trim").sum()
-        Xc  = xr.where(den > 0, num / den, np.nan)
-        Xc = as_ordinal(Xc)
-        return Xc
-
-    # ================= kpphbl =================
-    if var in ('kpphbl','mld','hbl'):
-        if tuple(da.dims) != ('j','i'):
-            raise ValueError("kpphbl must have dims ('j','i').")
-        wet_surf = (hFacC.isel(k=0) > 0)
-        Warea = xr.where(wet_surf, RAC, 0.0)
-        num = (da * Warea).coarsen(j=box_j, i=box_i, boundary="trim").sum()
-        den = (Warea    ).coarsen(j=box_j, i=box_i, boundary="trim").sum()
-        Hc  = xr.where(den > 0, num/den, np.nan)
-        Hc = as_ordinal(Hc)
-        return Hc
-
-    # ================= Sea surface height =================
-    if var in ('eta', 'ssh', 'etabar'):
-        # Expect a single-level surface field at centers
-        if tuple(da.dims) != ('j','i'):
-            raise ValueError("Eta/SSH must have dims ('j','i').")
-        # surface-wet mask (only average over ocean)
-        wet_surf = (hFacC.isel(k=0) > 0)
-        Warea = xr.where(wet_surf, RAC, 0.0)  # (j,i)
-        # area-weighted coarse average
-        num = (da * Warea).coarsen(j=box_j, i=box_i, boundary="trim").sum()
-        den = (Warea   ).coarsen(j=box_j, i=box_i, boundary="trim").sum()
-        Eta_coarse = xr.where(den > 0, num / den, np.nan)
-        Eta_coarse = as_ordinal(Eta_coarse)
-        return Eta_coarse
-        
     raise ValueError(f"Unsupported varname: {varname!r}")
-
-if __name__ == "__main__":
-    #  MITgcm path
-    path_scratch = '/scratch/jczhang/'
-    path_MITgcm = 'MITgcm_5km/MITgcm/verification/tutorial_reentrant_channel/run/'
-    grid_dir = path_scratch + path_MITgcm
-    
-    # get the grid variables and create the ds
-    ds_fine = read_mitgcm.read_mitgrid_staggered(grid_dir)
-    ds_grid = build_coarse_grid.build_coarse_grid_staggered(ds_fine,box_j=10, box_i=10)
-    U = read_mitgcm._ocean_var(grid_dir, "U", time_index[_], ("k","j","i_g"))
-    Ubar = coarse_field("U", U, ds_fine, ds_grid, 10, 10)
