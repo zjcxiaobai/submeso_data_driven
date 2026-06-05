@@ -1,0 +1,3 @@
+About KE vs EKE: for checking equilibrium/spinup, start with total KE. It tells you whether the model energy is still drifting upward, decaying, or reaching a statistically steady range. EKE is useful after that, but I would define EKE using deviation from a temporal mean, not spatial mean: 
+EKE = 0.5 * [(u - <u>_time)^2 + (v - <v>_time)^2]
+Spatial-mean deviation mostly removes the domain-mean flow, but leaves the standing jet/front counted as “eddy” energy. For your reentrant channel, temporal-mean EKE is the more physical eddy diagnostic once you have a long enough averaging window.
