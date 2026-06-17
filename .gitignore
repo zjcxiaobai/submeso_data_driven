@@ -6,6 +6,7 @@ scratch/
 *.npy
 *.npz
 *.csv
+*.tiff
 *.nc
 *.pt
 *.pth
