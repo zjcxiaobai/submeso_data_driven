@@ -5,6 +5,7 @@ data/
 scratch/
 *.npy
 *.npz
+*.csv
 *.nc
 *.pt
 *.pth
