@@ -1,0 +1,59 @@
+seed: 42
+device: auto
+data:
+  x_path: data/X.npy
+  y_path: data/y.npy
+  batch_size: 48
+  num_workers: 4
+  pin_memory: true
+  split:
+    train: 0.7
+    val: 0.15
+    test: 0.15
+    shuffle: false
+    shuffle_train_val: false
+  shuffle_train_loader: true
+  normalize_x: true
+  normalize_y: true
+  stats_scope: train
+  stats_path: outputs_resunet_no_shuffle/norm_stats.npz
+  temporal_offsets:
+  - 0
+  augment_x_roll: true
+model:
+  name: ResUNet_3Layers
+  in_channels: 8
+  out_channels: 1
+  base_channels: 64
+  kernel_size: 3
+  norm: gn
+  dropout: 0.05
+  bottleneck_dropout: 0.15
+  bottleneck_dilations:
+  - 1
+  - 2
+  activation: silu
+loss:
+  name: mse
+  domain_mean_weight: 0.05
+  high_y_weight: 0.0
+  high_y_eps: 1.0e-06
+  gradient_weight: 0.0
+  gradient_periodic_x: true
+optimizer:
+  name: adamw
+  lr: 0.0002
+  weight_decay: 0.001
+scheduler:
+  name: cosine
+  min_lr: 1.0e-06
+train:
+  epochs: 300
+  amp: true
+  grad_clip_norm: 1.0
+  early_stopping_patience: 10
+  checkpoint_dir: /scratch/jczhang/submeso_data_driven/ResUNet/outputs_resunet_no_shuffle/checkpoints
+  best_checkpoint: /scratch/jczhang/submeso_data_driven/ResUNet/outputs_resunet_no_shuffle/checkpoints/best.pt
+  last_checkpoint: /scratch/jczhang/submeso_data_driven/ResUNet/outputs_resunet_no_shuffle/checkpoints/last.pt
+  history_csv: /scratch/jczhang/submeso_data_driven/ResUNet/outputs_resunet_no_shuffle/history.csv
+  config_snapshot: /scratch/jczhang/submeso_data_driven/ResUNet/outputs_resunet_no_shuffle/config.yaml
