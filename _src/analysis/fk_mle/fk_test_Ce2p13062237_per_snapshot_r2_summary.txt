@@ -1,0 +1,16 @@
+Tuned-Ce FK no-shuffle test R2 summary
+C_e: 2.13062237
+sample_index_range: 9510-11188
+time_index_range: 22005936-24905520
+count: 1679
+finite_count: 1679
+mean: 0.1144623446
+median: 0.1131639143
+std: 0.05056187794
+min: -0.07575327057
+max: 0.2947024489
+p05: 0.03826173392
+p25: 0.07946422515
+p75: 0.1477689643
+p95: 0.197543245
+overall_r2: 0.1205980917

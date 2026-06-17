@@ -1,0 +1,25 @@
+SubmesoFluxNet versus FK spatial correlation
+sample_index_range: 9510-11188
+n_common_snapshots: 1679
+
+SubmesoFluxNet
+count: 1679
+finite_count: 1679
+mean: 0.7359364181
+median: 0.7425385643
+std: 0.05339649937
+min: 0.5015150756
+max: 0.8796899511
+p05: 0.6415759644
+p95: 0.8151762093
+
+FK
+count: 1679
+finite_count: 1679
+mean: 0.3639896867
+median: 0.3624922065
+std: 0.06380075029
+min: 0.1439763823
+max: 0.565219681
+p05: 0.2646074522
+p95: 0.4685203886

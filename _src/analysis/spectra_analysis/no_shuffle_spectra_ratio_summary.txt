@@ -1,0 +1,13 @@
+No-shuffle isotropic spectrum-ratio summary
+samples: 1679
+field_shape: (1679, 1, 56, 56)
+remove_spatial_mean: True
+k0_included: false
+ratio_mean_all_k: 0.4159033023
+ratio_median_all_k: 0.3982800925
+large_scale_k_1_4_mean_ratio: 0.5502019234
+large_scale_k_1_4_median_ratio: 0.5522168417
+mesoscale_k_5_12_mean_ratio: 0.5154519413
+mesoscale_k_5_12_median_ratio: 0.509932187
+small_scale_k_13_max_mean_ratio: 0.3682753167
+small_scale_k_13_max_median_ratio: 0.3644350179

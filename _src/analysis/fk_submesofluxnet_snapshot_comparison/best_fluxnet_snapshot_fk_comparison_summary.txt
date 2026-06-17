@@ -1,0 +1,15 @@
+Best SubmesoFluxNet snapshot comparison against FK
+selection: maximum SubmesoFluxNet per-snapshot R2 on no_shuffle_overfitting_test
+normalized_squared_error: ((prediction - truth) / std(truth_selected_snapshot))^2
+temporal_correlation: pixelwise Pearson correlation over the aligned test time series
+sample_index: 9770
+test_position: 260
+time_index: 22455216
+submesofluxnet_snapshot_r2: 0.7229849398
+fk_snapshot_r2: 0.2096389404
+submesofluxnet_snapshot_spatial_corr: 0.8512992937
+fk_snapshot_spatial_corr: 0.4881998549
+submesofluxnet_nse_mean: 0.2770150722
+fk_nse_mean: 0.7903610596
+submesofluxnet_temporal_corr_mean: 0.6293449092
+fk_temporal_corr_mean: 0.2848886663

@@ -1,0 +1,26 @@
+Best and worst no-shuffle overfitting-test snapshots
+error_definition: normalized_squared_error = ((prediction - truth) / std(truth_snapshot))^2
+
+Best case
+sample_index: 9770
+test_position: 260
+r2: 0.7229849398
+truth_min: -41.51242828
+truth_max: 142.521286
+prediction_min: -32.60379028
+prediction_max: 129.9766388
+normalized_squared_error_mean: 0.2770150722
+normalized_squared_error_p95: 1.140881053
+normalized_squared_error_p99: 5.008248585
+
+Worst case
+sample_index: 10220
+test_position: 710
+r2: 0.2488519549
+truth_min: -64.63598633
+truth_max: 277.4126282
+prediction_min: -17.94969749
+prediction_max: 83.80256653
+normalized_squared_error_mean: 0.7511479734
+normalized_squared_error_p95: 0.821199693
+normalized_squared_error_p99: 7.006390164

@@ -1,0 +1,14 @@
+No-shuffle overfitting-test per-snapshot R2 summary
+sample_index_range: 9510-11188
+count: 1679
+finite_count: 1679
+mean: 0.5328817939
+median: 0.5396113098
+std: 0.07731509075
+min: 0.2488519549
+max: 0.7229849398
+p05: 0.3956321537
+p25: 0.4845285714
+p75: 0.5861462355
+p95: 0.6524733633
+lowest_rolling_window: sample 10141-10221, mean_r2=0.4165133161

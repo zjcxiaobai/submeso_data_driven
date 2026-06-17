@@ -1,0 +1,29 @@
+FK versus SubmesoFluxNet per-snapshot R2 comparison
+sample_index_range: 9510-11188
+n_common_snapshots: 1679
+
+SubmesoFluxNet
+count: 1679
+finite_count: 1679
+mean: 0.5328817939
+median: 0.5396113098
+std: 0.07731509075
+min: 0.2488519549
+max: 0.7229849398
+p05: 0.3956321537
+p25: 0.4845285714
+p75: 0.5861462355
+p95: 0.6524733633
+
+FK
+count: 1679
+finite_count: 1679
+mean: 0.1144623446
+median: 0.1131639143
+std: 0.05056187794
+min: -0.07575327057
+max: 0.2947024489
+p05: 0.03826173392
+p25: 0.07946422515
+p75: 0.1477689643
+p95: 0.197543245

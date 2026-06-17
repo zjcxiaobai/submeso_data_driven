@@ -1,0 +1,20 @@
+FK C_e random-search tuning on SubmesoFluxNet training samples
+config: /scratch/jczhang/submeso_data_driven/_src/configs/unet_no_shuffle_overfitting_test.yaml
+fk_inputs: /scratch/jczhang/submeso_data_driven/src/post_analysis/00_FK_Ce_LfMin_Tuning/fk_input_trimmed.npz
+truth: /scratch/jczhang/submeso_data_driven/data/mld/wT.npz
+n_aligned_train_snapshots: 7079
+sample_index_range: 753-7831
+time_index_range: 6801264-19104624
+ce_range: 0.1-4.0
+n_trials_random: 200
+lf_min: 1000.0
+submeso_lmax: 2751.0
+submeso_inv_tau: 2e-06
+
+Best by mean per-snapshot R2
+C_e: 2.13062237
+mean_per_snapshot_r2: 0.1469485625
+median_per_snapshot_r2: 0.1427576154
+overall_r2: 0.1575491126
+mae: 5.037274667
+rmse: 12.45177204

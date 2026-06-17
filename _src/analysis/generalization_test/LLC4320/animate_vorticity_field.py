@@ -1,0 +1,271 @@
+#!/usr/bin/env python3
+"""Animate surface vorticity from MITgcm U/V snapshots for generalization tests."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import numpy as np
+import xarray as xr
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.utils import read_mitgcm  # noqa: E402
+from src.utils.vorticity import vorticity  # noqa: E402
+
+
+DEFAULT_RUN_DIR = Path(
+    "/scratch/jczhang/MITgcm_1km/verification/tutorial_reentrant_channel/run"
+)
+DEFAULT_OUT = Path(__file__).resolve().parent / "vorticity_1500030_1584090.gif"
+
+
+def iteration_path(run_dir: Path, varname: str, iteration: int, suffix: str) -> Path:
+    return run_dir / f"{varname}.{iteration:010d}.{suffix}"
+
+
+def selected_iterations(start: int, end: int, base_interval: int, stride: int) -> np.ndarray:
+    step = int(base_interval) * int(stride)
+    iterations = np.arange(start, end + step, step, dtype=int)
+    return iterations[iterations <= end]
+
+
+def validate_iteration_files(
+    run_dir: Path,
+    iterations: np.ndarray,
+    varnames: tuple[str, ...] = ("U", "V"),
+) -> None:
+    missing: list[Path] = []
+    for iteration in iterations:
+        for varname in varnames:
+            data_path = iteration_path(run_dir, varname, int(iteration), "data")
+            meta_path = iteration_path(run_dir, varname, int(iteration), "meta")
+            if not data_path.exists():
+                missing.append(data_path)
+            if not meta_path.exists():
+                missing.append(meta_path)
+
+    if missing:
+        sample = "\n".join(f"  {path}" for path in missing[:20])
+        extra = "" if len(missing) <= 20 else f"\n  ... {len(missing) - 20} more"
+        raise FileNotFoundError(f"Missing MITgcm U/V files:\n{sample}{extra}")
+
+
+def surface_vorticity_grid(ds_grid: xr.Dataset, surface_index: int) -> xr.Dataset:
+    """Select the horizontal grid variables required by src.utils.vorticity.vorticity."""
+    return xr.Dataset(
+        {
+            "hFacW": ds_grid["hFacW"].isel(k=surface_index, drop=True),
+            "hFacS": ds_grid["hFacS"].isel(k=surface_index, drop=True),
+            "hFacC": ds_grid["hFacC"].isel(k=surface_index, drop=True),
+            "DXC": ds_grid["DXC"],
+            "DYC": ds_grid["DYC"],
+            "RAZ": ds_grid["RAZ"],
+            "XC": ds_grid["XC"],
+            "YC": ds_grid["YC"],
+        }
+    )
+
+
+def load_surface_velocity(run_dir: Path, iteration: int, surface_index: int) -> xr.Dataset:
+    """Load U and V at one MITgcm iteration and select the surface level."""
+    u = read_mitgcm._ocean_var(str(run_dir), "U", int(iteration), ("k", "j", "i_g"))
+    v = read_mitgcm._ocean_var(str(run_dir), "V", int(iteration), ("k", "j_g", "i"))
+    return xr.Dataset(
+        {
+            "U": u.isel(k=surface_index, drop=True),
+            "V": v.isel(k=surface_index, drop=True),
+        }
+    )
+
+
+def load_surface_vorticity(
+    run_dir: Path,
+    ds_surface_grid: xr.Dataset,
+    iteration: int,
+    surface_index: int,
+) -> xr.DataArray:
+    ds_uv = load_surface_velocity(run_dir, iteration, surface_index)
+    zeta = vorticity(
+        ds_surface_grid,
+        ds_uv,
+        y_boundary="fill",
+        output_name="surface_vorticity",
+    )
+    zeta.attrs["iteration"] = int(iteration)
+    return zeta
+
+
+def image_extent(ds_surface_grid: xr.Dataset) -> tuple[float, float, float, float] | None:
+    if "XC" not in ds_surface_grid or "YC" not in ds_surface_grid:
+        return None
+
+    xc = ds_surface_grid["XC"].values
+    yc = ds_surface_grid["YC"].values
+    if not np.isfinite(xc).any() or not np.isfinite(yc).any():
+        return None
+
+    return (
+        float(np.nanmin(xc)),
+        float(np.nanmax(xc)),
+        float(np.nanmin(yc)),
+        float(np.nanmax(yc)),
+    )
+
+
+def choose_writer(output: Path, fps: int):
+    from matplotlib.animation import FFMpegWriter, PillowWriter
+
+    suffix = output.suffix.lower()
+    if suffix == ".gif":
+        return PillowWriter(fps=fps)
+    if suffix in {".mp4", ".m4v", ".mov"}:
+        return FFMpegWriter(fps=fps, bitrate=2400)
+    raise ValueError("Output must end with .gif, .mp4, .m4v, or .mov")
+
+
+def symmetric_color_limits(values: np.ndarray, percentile: float) -> tuple[float, float]:
+    scale = float(np.nanpercentile(np.abs(values), percentile))
+    if not np.isfinite(scale) or scale <= 0.0:
+        scale = float(np.nanmax(np.abs(values)))
+    if not np.isfinite(scale) or scale <= 0.0:
+        scale = 1.0
+    return -scale, scale
+
+
+def make_animation(
+    *,
+    run_dir: Path,
+    output: Path,
+    start: int,
+    end: int,
+    base_interval: int,
+    stride: int,
+    surface_index: int,
+    fps: int,
+    cmap: str,
+    vmin: float | None,
+    vmax: float | None,
+    color_percentile: float,
+    dpi: int,
+) -> None:
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.animation import FuncAnimation
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "matplotlib is required to render the animation. Load or install "
+            "matplotlib in the Python environment used to run this script."
+        ) from exc
+
+    iterations = selected_iterations(start, end, base_interval, stride)
+    if iterations.size == 0:
+        raise ValueError("No iterations selected; check start/end/base_interval/stride")
+
+    validate_iteration_files(run_dir, iterations)
+
+    ds_grid = read_mitgcm.read_mitgrid_staggered(str(run_dir))
+    ds_surface_grid = surface_vorticity_grid(ds_grid, surface_index)
+
+    first_zeta = load_surface_vorticity(run_dir, ds_surface_grid, int(iterations[0]), surface_index)
+    first_values = first_zeta.values
+    if vmin is None or vmax is None:
+        auto_vmin, auto_vmax = symmetric_color_limits(first_values, color_percentile)
+        vmin = auto_vmin if vmin is None else vmin
+        vmax = auto_vmax if vmax is None else vmax
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(9, 4.8), constrained_layout=True)
+    extent = image_extent(ds_surface_grid)
+    image = ax.imshow(
+        first_values,
+        origin="lower",
+        aspect="auto",
+        extent=extent,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        interpolation="nearest",
+    )
+    cbar = fig.colorbar(image, ax=ax)
+    cbar.set_label(first_zeta.attrs.get("units", "s^-1"))
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    title = ax.set_title(f"Surface vorticity | iteration {int(iterations[0])}")
+
+    def update(frame_index: int):
+        iteration = int(iterations[frame_index])
+        zeta = load_surface_vorticity(run_dir, ds_surface_grid, iteration, surface_index)
+        image.set_data(zeta.values)
+        title.set_text(f"Surface vorticity | iteration {iteration}")
+        print(f"[{frame_index + 1}/{len(iterations)}] iteration {iteration}", flush=True)
+        return image, title
+
+    animation = FuncAnimation(
+        fig,
+        update,
+        frames=len(iterations),
+        interval=1000 / fps,
+        blit=False,
+        repeat=False,
+    )
+    animation.save(output, writer=choose_writer(output, fps), dpi=dpi)
+    plt.close(fig)
+    print(f"Saved animation: {output}", flush=True)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Create a surface-vorticity GIF/MP4 from MITgcm U/V snapshots."
+    )
+    parser.add_argument("--run-dir", type=Path, default=DEFAULT_RUN_DIR)
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--start", type=int, default=1520010)
+    parser.add_argument("--end", type=int, default=1584090)
+    parser.add_argument("--base-interval", type=int, default=90)
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=9,
+        help="Use every stride-th base interval; default 9 gives 9 * 90 = 810.",
+    )
+    parser.add_argument("--surface-index", type=int, default=0)
+    parser.add_argument("--fps", type=int, default=12)
+    parser.add_argument("--cmap", default="RdBu_r")
+    parser.add_argument("--vmin", type=float, default=None)
+    parser.add_argument("--vmax", type=float, default=None)
+    parser.add_argument("--color-percentile", type=float, default=99.0)
+    parser.add_argument("--dpi", type=int, default=140)
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    make_animation(
+        run_dir=args.run_dir.expanduser().resolve(),
+        output=args.output.expanduser().resolve(),
+        start=args.start,
+        end=args.end,
+        base_interval=args.base_interval,
+        stride=args.stride,
+        surface_index=args.surface_index,
+        fps=args.fps,
+        cmap=args.cmap,
+        vmin=args.vmin,
+        vmax=args.vmax,
+        color_percentile=args.color_percentile,
+        dpi=args.dpi,
+    )
+
+
+if __name__ == "__main__":
+    main()
