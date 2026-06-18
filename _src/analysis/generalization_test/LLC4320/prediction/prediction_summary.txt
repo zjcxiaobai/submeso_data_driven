@@ -1,0 +1,11 @@
+LLC4320 no_shuffle_overfitting_test prediction summary
+X_shape: (10, 8, 10, 12)
+y_shape: (10, 1, 10, 12)
+snapshot_count: 10
+overall_r2: -0.1605698594
+overall_mse: 24473.34077
+overall_mae: 93.6644898
+mean_per_snapshot_r2: -0.1831542776
+median_per_snapshot_r2: -0.1715896799
+min_per_snapshot_r2: -0.339557693
+max_per_snapshot_r2: 0.04459792009
