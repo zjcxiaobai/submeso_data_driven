@@ -22,7 +22,7 @@ def resolve_paths(config: dict, root: Path) -> dict:
     for section_name in ("train",):
         section = config.get(section_name, {})
         for key, value in list(section.items()):
-            if key.endswith(("dir", "csv", "checkpoint")) and isinstance(value, str):
+            if (key.endswith(("dir", "csv", "checkpoint")) or key == "config_snapshot") and isinstance(value, str):
                 section[key] = str((root / value).resolve())
     data = config.get("data", {})
     for key in ("x_path", "y_path", "stats_path"):

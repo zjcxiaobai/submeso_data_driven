@@ -1,23 +1,86 @@
 from __future__ import annotations
 
+import copy
 import csv
 from pathlib import Path
 
 import torch
+import yaml
 import torch.distributed as dist
 import torch.nn as nn
 from torch.amp import GradScaler, autocast
 
 
+class CompositeRegressionLoss(nn.Module):
+    def __init__(
+        self,
+        *,
+        base_loss: nn.Module,
+        domain_mean_weight: float = 0.0,
+        high_y_weight: float = 0.0,
+        high_y_eps: float = 1.0e-6,
+        gradient_weight: float = 0.0,
+        gradient_periodic_x: bool = True,
+    ) -> None:
+        super().__init__()
+        self.base_loss = base_loss
+        self.domain_mean_weight = domain_mean_weight
+        self.high_y_weight = high_y_weight
+        self.high_y_eps = high_y_eps
+        self.gradient_weight = gradient_weight
+        self.gradient_periodic_x = gradient_periodic_x
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        loss = self.base_loss(pred, target)
+
+        if self.domain_mean_weight > 0.0:
+            pred_mean = pred.mean(dim=(-2, -1))
+            target_mean = target.mean(dim=(-2, -1))
+            loss = loss + self.domain_mean_weight * torch.nn.functional.mse_loss(pred_mean, target_mean)
+
+        if self.high_y_weight > 0.0:
+            abs_target = target.detach().abs()
+            scale = abs_target / abs_target.mean().clamp_min(self.high_y_eps)
+            loss = loss + self.high_y_weight * torch.mean(scale * (pred - target) ** 2)
+
+        if self.gradient_weight > 0.0:
+            loss = loss + self.gradient_weight * self._gradient_loss(pred, target)
+
+        return loss
+
+    def _gradient_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        if self.gradient_periodic_x:
+            pred_dx = torch.roll(pred, shifts=-1, dims=-1) - pred
+            target_dx = torch.roll(target, shifts=-1, dims=-1) - target
+        else:
+            pred_dx = pred[..., :, 1:] - pred[..., :, :-1]
+            target_dx = target[..., :, 1:] - target[..., :, :-1]
+
+        pred_dy = pred[..., 1:, :] - pred[..., :-1, :]
+        target_dy = target[..., 1:, :] - target[..., :-1, :]
+
+        return torch.nn.functional.mse_loss(pred_dx, target_dx) + torch.nn.functional.mse_loss(pred_dy, target_dy)
+
+
 def build_loss(config: dict) -> nn.Module:
     name = config.get("name", "mse").lower()
     if name == "mse":
-        return nn.MSELoss()
-    if name in {"mae", "l1"}:
-        return nn.L1Loss()
-    if name in {"huber", "smooth_l1"}:
-        return nn.SmoothL1Loss()
-    raise ValueError(f"Unknown loss: {name}")
+        base_loss: nn.Module = nn.MSELoss()
+    elif name in {"mae", "l1"}:
+        base_loss = nn.L1Loss()
+    elif name in {"huber", "smooth_l1"}:
+        base_loss = nn.SmoothL1Loss()
+    else:
+        raise ValueError(f"Unknown loss: {name}")
+
+    return CompositeRegressionLoss(
+        base_loss=base_loss,
+        domain_mean_weight=float(config.get("domain_mean_weight", 0.0)),
+        high_y_weight=float(config.get("high_y_weight", 0.0)),
+        high_y_eps=float(config.get("high_y_eps", 1.0e-6)),
+        gradient_weight=float(config.get("gradient_weight", 0.0)),
+        gradient_periodic_x=bool(config.get("gradient_periodic_x", True)),
+    )
 
 
 def build_optimizer(model: nn.Module, config: dict) -> torch.optim.Optimizer:
@@ -136,6 +199,13 @@ def append_history(path: Path, row: dict) -> None:
         writer.writerow({name: row.get(name, "") for name in fieldnames})
 
 
+def save_config_snapshot(path: Path, config: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot = copy.deepcopy(config)
+    with path.open("w") as handle:
+        yaml.safe_dump(snapshot, handle, sort_keys=False)
+
+
 def save_checkpoint(
     path: Path,
     *,
@@ -186,6 +256,10 @@ def fit(
     history_csv = Path(train_cfg["history_csv"])
     best_path = Path(train_cfg["best_checkpoint"])
     last_path = Path(train_cfg["last_checkpoint"])
+    config_snapshot = Path(train_cfg.get("config_snapshot", history_csv.parent / "config.yaml"))
+
+    if is_main_process():
+        save_config_snapshot(config_snapshot, config)
 
     if resume_checkpoint is not None:
         checkpoint = torch.load(resume_checkpoint, map_location=device)
@@ -232,6 +306,7 @@ def fit(
 
         train_totals = reduce_sums(train_totals)
         train_loss = float((train_totals[0] / train_totals[1].clamp_min(1.0)).item())
+        train_metrics = evaluate(model, train_loader, loss_fn, device, amp=amp)
         val_metrics = evaluate(model, val_loader, loss_fn, device, amp=amp)
         lr = optimizer.param_groups[0]["lr"]
 
@@ -245,6 +320,9 @@ def fit(
             "epoch": epoch,
             "lr": lr,
             "train_loss": train_loss,
+            "train_mse": train_metrics["mse"],
+            "train_mae": train_metrics["mae"],
+            "train_r2": train_metrics["r2"],
             "val_loss": val_metrics["loss"],
             "val_mse": val_metrics["mse"],
             "val_mae": val_metrics["mae"],
@@ -281,9 +359,9 @@ def fit(
                 config=config,
             )
             print(
-                f"epoch={epoch:04d} train={train_loss:.6g} val={val_metrics['loss']:.6g} "
-                f"mae={val_metrics['mae']:.6g} r2={val_metrics['r2']:.6g} "
-                f"lr={lr:.3e} best={best_val:.6g}",
+                f"epoch={epoch:04d} train={train_loss:.6g} train_r2={train_metrics['r2']:.6g} "
+                f"val={val_metrics['loss']:.6g} val_r2={val_metrics['r2']:.6g} "
+                f"val_mae={val_metrics['mae']:.6g} lr={lr:.3e} best={best_val:.6g}",
                 flush=True,
             )
 
