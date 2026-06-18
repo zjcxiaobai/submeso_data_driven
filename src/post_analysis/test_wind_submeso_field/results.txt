@@ -9,14 +9,14 @@ We compared the submesoscale field after few hours when turned off the wind, few
 
 # some info
 1. with constant wind: 
-start time = 26604288
-end time = 26767152
+start time = 26701056
+end time = 
 
 2. without wind:
-start time = 26604288
-end time = 26624160
+start time = 26701056
+end time = 
 
 3. with temporal wind:
-start time = 
-end time = 26766720
+start time = 26701056
+end time = 
 
