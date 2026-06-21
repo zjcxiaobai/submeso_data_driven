@@ -22,7 +22,7 @@ from src.utils.Rossby import DEFAULT_BETA, DEFAULT_F0, rossby_number  # noqa: E4
 DEFAULT_RUN_DIR = Path(
     "/scratch/jczhang/MITgcm_1km/verification/tutorial_reentrant_channel/run"
 )
-DEFAULT_ITERATION = 1365120
+DEFAULT_ITERATION = 1459020
 DEFAULT_OUTPUT = (
     Path(__file__).resolve().parent / f"rossby_snapshot_1km_{DEFAULT_ITERATION:010d}.png"
 )
