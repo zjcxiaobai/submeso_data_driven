@@ -1,0 +1,26 @@
+Time-mean skill comparison
+metric: global R2 after block averaging prediction and truth over consecutive test snapshots
+window_units: model days, assuming one saved test snapshot per model day
+n_aligned_snapshots: 936
+time_index_median_spacing: 8640
+time_index_min_spacing: 1728
+time_index_max_spacing: 84672
+best_submesofluxnet_window: 730
+best_submesofluxnet_r2: 0.9957958877
+best_fk_window: 540
+best_fk_r2: 0.7080367744
+
+window_30
+n_blocks: 31
+submesofluxnet_r2: 0.9736683303
+fk_r2: 0.5631253516
+
+window_90
+n_blocks: 10
+submesofluxnet_r2: 0.9868971108
+fk_r2: 0.6381859889
+
+window_365
+n_blocks: 2
+submesofluxnet_r2: 0.994489658
+fk_r2: 0.6920411855

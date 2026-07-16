@@ -1,0 +1,13 @@
+Annual-mean map comparison
+selection: first complete annual block by default
+normalized_squared_error: ((prediction - truth) / std(annual_mean_truth))^2
+window_model_days: 365
+block_index: 0
+start_sample_index: 4839
+end_sample_index: 7374
+start_time_index: 13934448
+end_time_index: 18314928
+submesofluxnet_annual_r2: 0.9945968752
+fk_annual_r2: 0.6766285024
+submesofluxnet_nse_mean: 0.005403124839
+fk_nse_mean: 0.3233714976
