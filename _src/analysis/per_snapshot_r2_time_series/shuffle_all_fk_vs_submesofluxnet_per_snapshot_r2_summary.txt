@@ -1,0 +1,31 @@
+MLE versus SubmesoFluxNet per-snapshot R2 comparison
+comparison_scope: sample_index intersection of MLE and SubmesoFluxNet R2 files
+note: SubmesoFluxNet is restricted to the same MLE-available subset before statistics are computed
+sample_index_range: 4839-11186
+n_common_snapshots: 936
+
+SubmesoFluxNet
+count: 936
+finite_count: 936
+mean: 0.8480660037
+median: 0.8567614555
+std: 0.06085635644
+min: 0.5005948544
+max: 0.9647619836
+p05: 0.7399420291
+p25: 0.8145469278
+p75: 0.8908557147
+p95: 0.9325192552
+
+MLE
+count: 936
+finite_count: 936
+mean: 0.1923167625
+median: 0.1851713458
+std: 0.09385611227
+min: -0.1817588946
+max: 0.4933355567
+p05: 0.05439396009
+p25: 0.1267088116
+p75: 0.2543035532
+p95: 0.3481230371

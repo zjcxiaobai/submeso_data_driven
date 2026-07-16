@@ -82,7 +82,7 @@ def apply_publication_style() -> None:
             "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "sans-serif"],
             "svg.fonttype": "none",
             "pdf.fonttype": 42,
-            "font.size": 7,
+            "font.size": 6,
             "axes.spines.right": False,
             "axes.spines.top": False,
             "axes.linewidth": 0.65,
@@ -195,9 +195,9 @@ def format_panel(ax: plt.Axes) -> None:
 
 def add_colorbar(fig: plt.Figure, image, ax: plt.Axes, label: str) -> None:
     cbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.025)
-    cbar.ax.tick_params(labelsize=6, length=2, width=0.55, colors=PALETTE["neutral_dark"])
+    cbar.ax.tick_params(labelsize=4.5, length=2, width=0.55, colors=PALETTE["neutral_dark"])
     cbar.outline.set_linewidth(0.55)
-    cbar.set_label(label, fontsize=6.5, color=PALETTE["neutral_dark"], labelpad=2)
+    cbar.set_label(label, fontsize=4.8, color=PALETTE["neutral_dark"], labelpad=2)
 
 
 def draw_figure(
@@ -209,7 +209,7 @@ def draw_figure(
 ) -> None:
     apply_publication_style()
     cases = [best, worst]
-    fig, axes = plt.subplots(2, 3, figsize=(4.8, 2.2), constrained_layout=True)
+    fig, axes = plt.subplots(2, 3, figsize=(4.8, 1.3), constrained_layout=True)
 
     error_maps = [normalized_squared_error(case.prediction, case.target) for case in cases]
     error_values = np.concatenate([error.ravel() for error in error_maps])
@@ -236,7 +236,7 @@ def draw_figure(
             image = ax.imshow(values, origin="lower", cmap=cmap, norm=norm, interpolation="nearest")
             format_panel(ax)
             if row == 0:
-                ax.set_title(title, fontsize=7.5, pad=4)
+                ax.set_title(title, fontsize=5.5, pad=4)
             add_colorbar(fig, image, ax, cbar_label)
 
         axes[row, 0].text(
@@ -248,15 +248,12 @@ def draw_figure(
             transform=axes[row, 0].transAxes,
             ha="right",
             va="center",
-            fontsize=7,
+            fontsize=6,
             color=PALETTE["neutral_dark"],
         )
 
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_prefix.with_suffix(".svg"), bbox_inches="tight")
-    fig.savefig(output_prefix.with_suffix(".pdf"), bbox_inches="tight")
     fig.savefig(output_prefix.with_suffix(".png"), dpi=600, bbox_inches="tight")
-    fig.savefig(output_prefix.with_suffix(".tiff"), dpi=600, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -295,10 +292,7 @@ def main() -> None:
 
     print(f"Best case: sample={best.sample_index}, R2={best.r2:.6f}", flush=True)
     print(f"Worst case: sample={worst.sample_index}, R2={worst.r2:.6f}", flush=True)
-    print(f"Saved {args.output_prefix.with_suffix('.svg')}", flush=True)
-    print(f"Saved {args.output_prefix.with_suffix('.pdf')}", flush=True)
     print(f"Saved {args.output_prefix.with_suffix('.png')}", flush=True)
-    print(f"Saved {args.output_prefix.with_suffix('.tiff')}", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
 
 

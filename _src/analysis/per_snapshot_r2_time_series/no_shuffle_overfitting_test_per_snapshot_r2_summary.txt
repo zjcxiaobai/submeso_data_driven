@@ -1,14 +1,14 @@
 No-shuffle overfitting-test per-snapshot R2 summary
-sample_index_range: 9510-11188
-count: 1679
-finite_count: 1679
-mean: 0.5328817939
-median: 0.5396113098
-std: 0.07731509075
-min: 0.2488519549
-max: 0.7229849398
-p05: 0.3956321537
-p25: 0.4845285714
-p75: 0.5861462355
-p95: 0.6524733633
-lowest_rolling_window: sample 10141-10221, mean_r2=0.4165133161
+sample_index_range: 9512-11188
+count: 1677
+finite_count: 1677
+mean: 0.6664899051
+median: 0.6733577847
+std: 0.08841309132
+min: 0.3219876289
+max: 0.8508740366
+p05: 0.5172280014
+p25: 0.6066388488
+p75: 0.7306911051
+p95: 0.8035635322
+lowest_rolling_window: sample 10529-10609, mean_r2=0.5609175416

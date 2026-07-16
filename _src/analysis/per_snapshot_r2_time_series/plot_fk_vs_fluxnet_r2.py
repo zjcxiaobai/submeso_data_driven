@@ -55,6 +55,7 @@ def parse_args() -> argparse.Namespace:
         default=ANALYSIS_DIR / "fk_vs_submesofluxnet_per_snapshot_r2_stats.csv",
     )
     parser.add_argument("--rolling-window", type=int, default=81)
+    parser.add_argument("--fk-display-label", default="FK", help="Display label for the FK/MLE baseline in plots and summaries.")
     return parser.parse_args()
 
 
@@ -152,12 +153,17 @@ def summary(values: np.ndarray) -> dict[str, float | int]:
     }
 
 
-def write_stats(path: Path, flux_summary: dict[str, float | int], fk_summary: dict[str, float | int]) -> None:
+def write_stats(
+    path: Path,
+    flux_summary: dict[str, float | int],
+    fk_summary: dict[str, float | int],
+    fk_label: str,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=["method", "metric", "value"])
         writer.writeheader()
-        for method, vals in (("SubmesoFluxNet", flux_summary), ("FK", fk_summary)):
+        for method, vals in (("SubmesoFluxNet", flux_summary), (fk_label, fk_summary)):
             for key, value in vals.items():
                 writer.writerow({"method": method, "metric": key, "value": value})
 
@@ -167,13 +173,16 @@ def write_summary(
     sample: np.ndarray,
     flux_summary: dict[str, float | int],
     fk_summary: dict[str, float | int],
+    fk_label: str,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
-        handle.write("FK versus SubmesoFluxNet per-snapshot R2 comparison\n")
+        handle.write(f"{fk_label} versus SubmesoFluxNet per-snapshot R2 comparison\n")
+        handle.write(f"comparison_scope: sample_index intersection of {fk_label} and SubmesoFluxNet R2 files\n")
+        handle.write(f"note: SubmesoFluxNet is restricted to the same {fk_label}-available subset before statistics are computed\n")
         handle.write(f"sample_index_range: {int(sample.min())}-{int(sample.max())}\n")
         handle.write(f"n_common_snapshots: {sample.size}\n")
-        for label, vals in (("SubmesoFluxNet", flux_summary), ("FK", fk_summary)):
+        for label, vals in (("SubmesoFluxNet", flux_summary), (fk_label, fk_summary)):
             handle.write(f"\n{label}\n")
             for key, value in vals.items():
                 if isinstance(value, int):
@@ -190,6 +199,7 @@ def draw_figure(
     fk_summary: dict[str, float | int],
     rolling_window: int,
     output_prefix: Path,
+    fk_label: str,
 ) -> None:
     apply_publication_style()
     fig, (ax_ts, ax_hist) = plt.subplots(
@@ -202,11 +212,12 @@ def draw_figure(
 
     flux_smooth = rolling_median(fluxnet_r2, rolling_window)
     fk_smooth = rolling_median(fk_r2, rolling_window)
+    sample_number = np.arange(sample.size, dtype=np.int64)
 
-    ax_ts.plot(sample, fluxnet_r2, color=PALETTE["fluxnet"], linewidth=0.55, alpha=0.30, zorder=1)
-    ax_ts.plot(sample, fk_r2, color=PALETTE["fk"], linewidth=0.55, alpha=0.30, zorder=1)
+    ax_ts.plot(sample_number, fluxnet_r2, color=PALETTE["fluxnet"], linewidth=0.55, alpha=0.30, zorder=1)
+    ax_ts.plot(sample_number, fk_r2, color=PALETTE["fk"], linewidth=0.55, alpha=0.30, zorder=1)
     ax_ts.plot(
-        sample,
+        sample_number,
         flux_smooth,
         color=PALETTE["fluxnet"],
         linewidth=1.35,
@@ -214,20 +225,20 @@ def draw_figure(
         zorder=3,
     )
     ax_ts.plot(
-        sample,
+        sample_number,
         fk_smooth,
         color=PALETTE["fk"],
         linewidth=1.35,
-        label=fr"FK, mean $R^2$={float(fk_summary['mean']):.3f}",
+        label=fr"{fk_label}, mean $R^2$={float(fk_summary['mean']):.3f}",
         zorder=4,
     )
-    ax_ts.set_xlim(int(sample.min()), int(sample.max()))
+    ax_ts.set_xlim(0, int(sample_number.max()))
     ymin = min(float(np.nanmin(fluxnet_r2)), float(np.nanmin(fk_r2))) - 0.04
     ymax = min(1.0, max(float(np.nanmax(fluxnet_r2)), float(np.nanmax(fk_r2))) + 0.04)
     ax_ts.set_ylim(ymin, ymax)
-    ax_ts.set_xlabel("Held-out test data index")
+    ax_ts.set_xlabel("Held-out test sample number")
     ax_ts.set_ylabel(r"Per-snapshot $R^2$")
-    ax_ts.set_title(r"FK versus SubmesoFluxNet test $R^2$", fontsize=7.5, pad=4)
+    ax_ts.set_title(fr"{fk_label} versus SubmesoFluxNet test $R^2$", fontsize=7.5, pad=4)
     ax_ts.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.4, alpha=0.5)
     ax_ts.legend(loc="lower left", fontsize=6.4, handlelength=1.5)
 
@@ -237,7 +248,7 @@ def draw_figure(
     high = max(float(np.max(finite_flux)), float(np.max(finite_fk))) + 0.02
     bins = np.linspace(low, high, 24)
     ax_hist.hist(finite_flux, bins=bins, orientation="horizontal", color=PALETTE["fluxnet"], alpha=0.52, label="SubmesoFluxNet")
-    ax_hist.hist(finite_fk, bins=bins, orientation="horizontal", color=PALETTE["fk"], alpha=0.52, label="FK")
+    ax_hist.hist(finite_fk, bins=bins, orientation="horizontal", color=PALETTE["fk"], alpha=0.52, label=fk_label)
     ax_hist.axhline(float(flux_summary["mean"]), color=PALETTE["fluxnet"], linewidth=0.8)
     ax_hist.axhline(float(fk_summary["mean"]), color=PALETTE["fk"], linewidth=0.8)
     ax_hist.set_ylim(ax_ts.get_ylim())
@@ -251,11 +262,7 @@ def draw_figure(
         ax.spines["bottom"].set_color(PALETTE["neutral_mid"])
 
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        kwargs = {"bbox_inches": "tight"}
-        if ext in {".png", ".tiff"}:
-            kwargs["dpi"] = 600
-        fig.savefig(Path(f"{output_prefix}{ext}"), **kwargs)
+    fig.savefig(Path(f"{output_prefix}.png"), dpi=600, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -267,16 +274,24 @@ def main() -> None:
     flux_summary = summary(flux_aligned)
     fk_summary = summary(fk_aligned)
 
-    draw_figure(sample, flux_aligned, fk_aligned, flux_summary, fk_summary, args.rolling_window, args.output_prefix)
-    write_stats(args.stats_csv, flux_summary, fk_summary)
-    write_summary(args.summary_output, sample, flux_summary, fk_summary)
+    draw_figure(
+        sample,
+        flux_aligned,
+        fk_aligned,
+        flux_summary,
+        fk_summary,
+        args.rolling_window,
+        args.output_prefix,
+        args.fk_display_label,
+    )
+    write_stats(args.stats_csv, flux_summary, fk_summary, args.fk_display_label)
+    write_summary(args.summary_output, sample, flux_summary, fk_summary, args.fk_display_label)
 
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        print(f"Saved {args.output_prefix}{ext}", flush=True)
+    print(f"Saved {args.output_prefix}.png", flush=True)
     print(f"Saved {args.stats_csv}", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
     print(f"SubmesoFluxNet mean R2: {float(flux_summary['mean']):.6f}", flush=True)
-    print(f"FK mean R2: {float(fk_summary['mean']):.6f}", flush=True)
+    print(f"{args.fk_display_label} mean R2: {float(fk_summary['mean']):.6f}", flush=True)
 
 
 if __name__ == "__main__":

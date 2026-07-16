@@ -229,23 +229,25 @@ def draw_figure(
     p05 = float(summary["p05"])
     p95 = float(summary["p95"])
 
-    ax_ts.fill_between(sample_index, p05, p95, color=PALETTE["fill"], alpha=0.36, linewidth=0, zorder=1)
-    ax_ts.plot(sample_index, r2, color=PALETTE["line"], linewidth=0.75, alpha=0.62, zorder=2)
-    ax_ts.plot(sample_index, smooth, color=PALETTE["smooth"], linewidth=1.35, zorder=4)
+    x_axis = np.arange(r2.size, dtype=np.int64)
+    ax_ts.fill_between(x_axis, p05, p95, color=PALETTE["fill"], alpha=0.36, linewidth=0, zorder=1)
+    ax_ts.plot(x_axis, r2, color=PALETTE["line"], linewidth=0.75, alpha=0.62, zorder=2)
+    ax_ts.plot(x_axis, smooth, color=PALETTE["smooth"], linewidth=1.35, zorder=4)
     ax_ts.axhline(mean_r2, color=PALETTE["neutral_dark"], linewidth=0.8, linestyle=(0, (3, 2)), zorder=3)
-    ax_ts.set_xlim(int(np.min(sample_index)), int(np.max(sample_index)))
+    ax_ts.set_xlim(0, int(x_axis.max()))
     ax_ts.set_ylim(max(-0.05, float(np.nanmin(r2)) - 0.04), min(1.0, float(np.nanmax(r2)) + 0.04))
-    ax_ts.set_xlabel("Held-out test data index")
+    ax_ts.set_xlabel("Held-out test sample number")
     ax_ts.set_ylabel(r"Per-snapshot $R^2$")
     ax_ts.set_title(r"test $R^2$ VS time ", fontsize=7.5, pad=4)
     ax_ts.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.4, alpha=0.5)
+    y_text = ax_ts.get_ylim()[0] + 0.08 * (ax_ts.get_ylim()[1] - ax_ts.get_ylim()[0])
+    x_text = 400 if x_axis.min() <= 400 <= x_axis.max() else int(x_axis.min())
     ax_ts.text(
-        0.012,
-        0.96,
+        x_text,
+        y_text,
         fr"mean $R^2$={mean_r2:.3f}",
-        transform=ax_ts.transAxes,
         ha="left",
-        va="top",
+        va="bottom",
         color=PALETTE["neutral_dark"],
         fontsize=6.5,
     )
@@ -264,10 +266,7 @@ def draw_figure(
         ax.spines["bottom"].set_color(PALETTE["neutral_mid"])
 
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_prefix.with_suffix(".svg"), bbox_inches="tight")
-    fig.savefig(output_prefix.with_suffix(".pdf"), bbox_inches="tight")
     fig.savefig(output_prefix.with_suffix(".png"), dpi=600, bbox_inches="tight")
-    fig.savefig(output_prefix.with_suffix(".tiff"), dpi=600, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -290,10 +289,7 @@ def main() -> None:
     write_stats_csv(args.stats_csv, summary, low_start, low_end, low_mean)
     draw_figure(sample_index, r2, smooth, summary, low_start, low_end, args.output_prefix)
 
-    print(f"Saved {args.output_prefix.with_suffix('.svg')}", flush=True)
-    print(f"Saved {args.output_prefix.with_suffix('.pdf')}", flush=True)
     print(f"Saved {args.output_prefix.with_suffix('.png')}", flush=True)
-    print(f"Saved {args.output_prefix.with_suffix('.tiff')}", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
     print(f"Saved {args.stats_csv}", flush=True)
     print(f"mean R2: {summary['mean']:.6f}", flush=True)
