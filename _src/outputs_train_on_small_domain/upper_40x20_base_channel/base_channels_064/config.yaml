@@ -1,0 +1,55 @@
+seed: 42
+device: auto
+data:
+  x_path: data/train_on_small_domain/upper_40x20/X.npy
+  y_path: data/train_on_small_domain/upper_40x20/y.npy
+  batch_size: 128
+  num_workers: 4
+  pin_memory: true
+  split:
+    train: 0.7
+    val: 0.15
+    test: 0.15
+    shuffle: false
+    shuffle_train_val: false
+  shuffle_train_loader: false
+  normalize_x: true
+  normalize_y: true
+  stats_scope: train
+  stats_path: outputs_train_on_small_domain/upper_40x20_base_channel/base_channels_064/norm_stats.npz
+  temporal_offsets:
+  - 0
+  augment_x_roll: false
+model:
+  name: UNet_3Layers
+  in_channels: 8
+  out_channels: 1
+  base_channels: 64
+  kernel_size: 3
+  norm: bn
+  dropout: 0.4
+  activation: silu
+loss:
+  name: mse
+  domain_mean_weight: 0.0
+  high_y_weight: 0.0
+  high_y_eps: 0.0
+  gradient_weight: 0.0
+  gradient_periodic_x: true
+optimizer:
+  name: adamw
+  lr: 0.0003
+  weight_decay: 0.0003
+scheduler:
+  name: cosine
+  min_lr: 1.0e-06
+train:
+  epochs: 300
+  amp: true
+  grad_clip_norm: 1.0
+  early_stopping_patience: 15
+  checkpoint_dir: /scratch/jczhang/submeso_data_driven/_src/outputs_train_on_small_domain/upper_40x20_base_channel/base_channels_064/checkpoints
+  best_checkpoint: /scratch/jczhang/submeso_data_driven/_src/outputs_train_on_small_domain/upper_40x20_base_channel/base_channels_064/checkpoints/best.pt
+  last_checkpoint: /scratch/jczhang/submeso_data_driven/_src/outputs_train_on_small_domain/upper_40x20_base_channel/base_channels_064/checkpoints/last.pt
+  history_csv: /scratch/jczhang/submeso_data_driven/_src/outputs_train_on_small_domain/upper_40x20_base_channel/base_channels_064/history.csv
+  config_snapshot: /scratch/jczhang/submeso_data_driven/_src/outputs_train_on_small_domain/upper_40x20_base_channel/base_channels_064/config.yaml
