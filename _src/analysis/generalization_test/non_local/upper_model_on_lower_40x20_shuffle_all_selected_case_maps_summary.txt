@@ -1,0 +1,37 @@
+Shuffle-all non-local selected truth/prediction cases
+Predictions: /scratch/jczhang/submeso_data_driven/_src/analysis/generalization_test/non_local/upper_model_on_lower_40x20_shuffle_all_predictions_denorm.npz
+
+case: Best snapshot
+r2: 0.7924608737
+sample_start: 2577
+sample_stop: 2577
+n_snapshots: 1
+n_days: 0.5
+
+case: Worst snapshot
+r2: 0.1168847084
+sample_start: 7717
+sample_stop: 7717
+n_snapshots: 1
+n_days: 0.5
+
+case: Monthly mean
+r2: 0.808598896
+sample_start: 7948
+sample_stop: 8007
+n_snapshots: 60
+n_days: 30
+
+case: Seasonal mean
+r2: 0.8119799425
+sample_start: 7831
+sample_stop: 8010
+n_snapshots: 180
+n_days: 90
+
+case: Annual mean
+r2: 0.7649877069
+sample_start: 7629
+sample_stop: 8358
+n_snapshots: 730
+n_days: 365

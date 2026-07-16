@@ -1,0 +1,23 @@
+Best one-year non-local time-mean skill
+metric: global R2 after block averaging prediction and truth over consecutive snapshots
+snapshots_per_day: 2
+n_snapshots_in_best_year: 730
+best_year_sample_index: 7630 ... 8359
+best_year_mean_per_snapshot_r2: 0.4754921714
+best_time_mean_window_days: 240
+best_time_mean_r2: 0.7805531738
+
+window_30_days
+n_blocks: 12
+used_snapshots: 720
+submesofluxnet_r2: 0.6970527729
+
+window_90_days
+n_blocks: 4
+used_snapshots: 720
+submesofluxnet_r2: 0.737685928
+
+window_365_days
+n_blocks: 1
+used_snapshots: 730
+submesofluxnet_r2: 0.7648825554

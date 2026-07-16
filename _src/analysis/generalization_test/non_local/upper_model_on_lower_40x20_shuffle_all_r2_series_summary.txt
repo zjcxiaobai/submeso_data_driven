@@ -1,0 +1,9 @@
+Input: analysis/generalization_test/non_local/upper_model_on_lower_40x20_shuffle_all_r2_series.csv
+Samples: 11181
+First sample_index: 8
+Last sample_index: 11188
+Mean R2: 0.34354731
+Median R2: 0.34481108
+5th percentile R2: 0.13055402
+95th percentile R2: 0.55580798
+PNG: analysis/generalization_test/non_local/upper_model_on_lower_40x20_shuffle_all_r2_series.png

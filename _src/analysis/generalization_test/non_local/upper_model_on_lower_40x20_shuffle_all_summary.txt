@@ -1,0 +1,12 @@
+Config: configs/unet_encoder_convlstm_shuffle_all_upper_40x20.yaml
+Checkpoint: /scratch/jczhang/submeso_data_driven/_src/outputs_train_on_small_domain/upper_40x20_encoder_convlstm_shuffle_all/checkpoints/best.pt
+Domain: lower_40x20
+Temporal offsets: [-8, -7, -6, -5, -4, -3, -2, -1, 0]
+Samples evaluated: 11181
+First sample_index: 8
+Last sample_index: 11188
+overall_r2: 0.37449922
+mean_per_sample_r2: 0.34354731
+median_per_sample_r2: 0.34481108
+overall_mse: 122.73704529
+overall_mae: 5.02702999
