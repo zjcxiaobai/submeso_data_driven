@@ -32,12 +32,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fluxnet-predictions",
         type=Path,
-        default=PROJECT_DIR / "outputs_no_shuffle_overfitting_test/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm/test_predictions_denorm.npz",
     )
     parser.add_argument(
         "--fk-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/fk_mle/fk_test_Ce2p13062237_prediction_physical.npz",
+        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_test_Ce2p13062237_prediction_physical.npz",
     )
     parser.add_argument(
         "--output-prefix",
@@ -268,11 +268,7 @@ def draw_signed_joint_hist(
 
 def save_figure(fig: plt.Figure, output_prefix: Path) -> None:
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        kwargs = {"bbox_inches": "tight"}
-        if ext in {".png", ".tiff"}:
-            kwargs["dpi"] = 600
-        fig.savefig(Path(f"{output_prefix}{ext}"), **kwargs)
+    fig.savefig(Path(f"{output_prefix}.png"), dpi=600, bbox_inches="tight")
 
 
 def add_vertical_divider(fig: plt.Figure, left_axes: list[plt.Axes], right_axes: list[plt.Axes]) -> None:
@@ -301,6 +297,7 @@ def draw_main_figure(
     field_percentile: float,
     error_percentile: float,
     output_prefix: Path,
+    fk_label: str = "FK",
 ) -> None:
     apply_style()
     field_limit = robust_symmetric_limit(
@@ -317,7 +314,7 @@ def draw_main_figure(
     error_norm = Normalize(vmin=0.0, vmax=max(error_limit, 1.0e-6))
     corr_norm = TwoSlopeNorm(vmin=-1.0, vcenter=0.0, vmax=1.0)
 
-    fig = plt.figure(figsize=(6.35, 5.55), constrained_layout=True)
+    fig = plt.figure(figsize=(6.35, 3), constrained_layout=True)
     grid = fig.add_gridspec(3, 3, width_ratios=[1.0, 1.0, 1.0], height_ratios=[1.0, 1.0, 1.0])
     axes = np.asarray([[fig.add_subplot(grid[row, col]) for col in range(3)] for row in range(3)])
 
@@ -328,7 +325,7 @@ def draw_main_figure(
     pred_image = None
     for ax, title, values in (
         (axes[0, 1], "SubmesoFluxNet", fluxnet_best),
-        (axes[0, 2], "FK", fk_best),
+        (axes[0, 2], fk_label, fk_best),
     ):
         pred_image = ax.imshow(values, origin="lower", cmap="RdBu_r", norm=field_norm, interpolation="nearest")
         ax.set_title(title, fontsize=7.2, pad=4)
@@ -338,17 +335,17 @@ def draw_main_figure(
     error_image = None
     for ax, title, values in (
         (axes[1, 1], "SubmesoFluxNet", fluxnet_error),
-        (axes[1, 2], "FK", fk_error),
+        (axes[1, 2], fk_label, fk_error),
     ):
         error_image = ax.imshow(values, origin="lower", cmap="magma", norm=error_norm, interpolation="nearest")
         ax.set_title(title, fontsize=7.2, pad=4)
         format_map_axis(ax)
-    add_cbar(fig, error_image, [axes[1, 1], axes[1, 2]], r"Normalized squared error $(\Delta/\sigma_y)^2$")
+    add_cbar(fig, error_image, [axes[1, 1], axes[1, 2]], "Normalized squared error\n" + r"$(\Delta/\sigma_y)^2$")
 
     corr_image = None
     for ax, title, values in (
         (axes[2, 1], "SubmesoFluxNet", fluxnet_temporal_corr),
-        (axes[2, 2], "FK", fk_temporal_corr),
+        (axes[2, 2], fk_label, fk_temporal_corr),
     ):
         corr_image = ax.imshow(values, origin="lower", cmap="RdBu_r", norm=corr_norm, interpolation="nearest")
         ax.set_title(title, fontsize=7.2, pad=4)
@@ -370,6 +367,7 @@ def draw_joint_hist_figure(
     fk_best: np.ndarray,
     hist_bins: int,
     output_prefix: Path,
+    fk_label: str = "FK",
 ) -> None:
     apply_style()
     hist_limits = log_magnitude_limits(truth_best, fluxnet_best, fk_best)
@@ -377,8 +375,8 @@ def draw_joint_hist_figure(
     panels = (
         (axes[0, 0], truth_best, fluxnet_best, "SubmesoFluxNet negative", "SubmesoFluxNet", "negative"),
         (axes[0, 1], truth_best, fluxnet_best, "SubmesoFluxNet positive", "SubmesoFluxNet", "positive"),
-        (axes[1, 0], truth_best, fk_best, "FK negative", "FK", "negative"),
-        (axes[1, 1], truth_best, fk_best, "FK positive", "FK", "positive"),
+        (axes[1, 0], truth_best, fk_best, f"{fk_label} negative", fk_label, "negative"),
+        (axes[1, 1], truth_best, fk_best, f"{fk_label} positive", fk_label, "positive"),
     )
     for ax, truth, prediction, title, method_label, sign in panels:
         draw_signed_joint_hist(
@@ -415,7 +413,7 @@ def write_summary(
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
         handle.write("Best SubmesoFluxNet snapshot comparison against FK\n")
-        handle.write("selection: maximum SubmesoFluxNet per-snapshot R2 on no_shuffle_overfitting_test\n")
+        handle.write("selection: maximum SubmesoFluxNet per-snapshot R2 on upper_40x20 held-out test set\n")
         handle.write("normalized_squared_error: ((prediction - truth) / std(truth_selected_snapshot))^2\n")
         handle.write("temporal_correlation: pixelwise Pearson correlation over the aligned test time series\n")
         handle.write(f"sample_index: {sample_index}\n")
@@ -505,10 +503,8 @@ def main() -> None:
         fk_temporal_corr=fk_temporal_corr,
     )
 
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        print(f"Saved {args.output_prefix}{ext}", flush=True)
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        print(f"Saved {args.joint_output_prefix}{ext}", flush=True)
+    print(f"Saved {args.output_prefix}.png", flush=True)
+    print(f"Saved {args.joint_output_prefix}.png", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
     print(f"Saved {args.data_output}", flush=True)
     print(f"Best SubmesoFluxNet sample: {sample_index}, R2={float(flux_r2[best_pos]):.6f}", flush=True)
