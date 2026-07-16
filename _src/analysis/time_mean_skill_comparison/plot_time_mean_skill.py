@@ -29,16 +29,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fluxnet-predictions",
         type=Path,
-        default=PROJECT_DIR / "outputs_no_shuffle_overfitting_test/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm/test_predictions_denorm.npz",
     )
     parser.add_argument(
         "--fk-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/fk_mle/fk_test_Ce2p13062237_prediction_physical.npz",
+        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_test_Ce2p13062237_prediction_physical.npz",
     )
     parser.add_argument("--output-prefix", type=Path, default=HERE / "time_mean_skill_comparison")
     parser.add_argument("--csv-output", type=Path, default=HERE / "time_mean_skill_comparison.csv")
     parser.add_argument("--summary-output", type=Path, default=HERE / "time_mean_skill_comparison_summary.txt")
+    parser.add_argument("--fk-display-label", default="FK", help="Display label for the FK/MLE baseline in plots and logs.")
     parser.add_argument(
         "--windows",
         type=int,
@@ -127,6 +128,9 @@ def align_to_fluxnet(
 
     flux_pos_array = np.asarray(flux_positions, dtype=np.int64)
     fk_pos_array = np.asarray(fk_positions, dtype=np.int64)
+    order = np.argsort(flux_sample[flux_pos_array])
+    flux_pos_array = flux_pos_array[order]
+    fk_pos_array = fk_pos_array[order]
     aligned_time = fk_time_index[fk_pos_array] if fk_time_index is not None else None
     return (
         flux_prediction[flux_pos_array],
@@ -204,14 +208,10 @@ def write_csv(path: Path, rows: list[dict[str, float | int]]) -> None:
 
 def save_figure(fig: plt.Figure, output_prefix: Path) -> None:
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        kwargs = {"bbox_inches": "tight"}
-        if ext in {".png", ".tiff"}:
-            kwargs["dpi"] = 600
-        fig.savefig(Path(f"{output_prefix}{ext}"), **kwargs)
+    fig.savefig(Path(f"{output_prefix}.png"), dpi=600, bbox_inches="tight")
 
 
-def draw_figure(rows: list[dict[str, float | int]], output_prefix: Path) -> None:
+def draw_figure(rows: list[dict[str, float | int]], output_prefix: Path, fk_label: str = "FK") -> None:
     apply_style()
     x = np.asarray([row["window_snapshots"] for row in rows], dtype=np.float64)
     flux_r2 = np.asarray([row["submesofluxnet_r2"] for row in rows], dtype=np.float64)
@@ -234,7 +234,7 @@ def draw_figure(rows: list[dict[str, float | int]], output_prefix: Path) -> None
         marker="s",
         markersize=3.0,
         linewidth=1.35,
-        label="FK",
+        label=fk_label,
     )
 
     markers = ((30, "Monthly"), (90, "Seasonal"), (365, "Annual"))
@@ -308,10 +308,9 @@ def main() -> None:
     rows = compute_skill_by_window(target, flux_prediction, fk_prediction, args.windows)
     write_csv(args.csv_output, rows)
     write_summary(args.summary_output, rows, int(target.shape[0]), aligned_time)
-    draw_figure(rows, args.output_prefix)
+    draw_figure(rows, args.output_prefix, args.fk_display_label)
 
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        print(f"Saved {args.output_prefix}{ext}", flush=True)
+    print(f"Saved {args.output_prefix}.png", flush=True)
     print(f"Saved {args.csv_output}", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
     for row in rows:
@@ -319,7 +318,7 @@ def main() -> None:
             print(
                 f"window={row['window_snapshots']}: "
                 f"SubmesoFluxNet R2={float(row['submesofluxnet_r2']):.6f}, "
-                f"FK R2={float(row['fk_r2']):.6f}",
+                f"{args.fk_display_label} R2={float(row['fk_r2']):.6f}",
                 flush=True,
             )
 
