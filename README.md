@@ -1,5 +1,5 @@
-# submeso_CNN
-CNN for ocean submesoscale heat flux
+# SubmesoFluxNet
+Machine learning for ocean submesoscale heat flux parameterization
 
 ##  run
 This repo expects `X.npy` (N, C, H, W) and `y.npy` (N, 1, H, W)
