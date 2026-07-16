@@ -1,0 +1,13 @@
+base_config: configs/unet_no_shuffle_upper_40x20.yaml
+summary_csv: hyperparameter_tunning/learning_rate/learning_rate_random_search_summary.csv
+
+seed: 42
+n_trials: 20
+base_channels: 128
+
+lr_min: 0.0005
+lr_max: 0.005
+sampling: log_uniform
+
+epochs: 300
+early_stopping_patience: 15
