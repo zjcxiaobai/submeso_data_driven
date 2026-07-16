@@ -1,0 +1,26 @@
+{
+  "sample_index": 9523,
+  "source": "/scratch/jczhang/submeso_data_driven/_src/analysis/explanability/decoder_channel_ablation_encoder_convlstm/decoder_channel_ablation_best_snapshot.npz",
+  "source_config": "/scratch/jczhang/submeso_data_driven/_src/configs/unet_encoder_convlstm_no_shuffle_upper_40x20.yaml",
+  "source_checkpoint": "/scratch/jczhang/submeso_data_driven/_src/outputs_train_on_small_domain/upper_40x20_encoder_convlstm/checkpoints/best.pt",
+  "shape_yx": [
+    20,
+    40
+  ],
+  "dx_m": 50000.0,
+  "dy_m": 50000.0,
+  "periodic_x": true,
+  "periodic_y": false,
+  "f0_s-1": -0.0001363,
+  "beta_s-1_m-1": 1.313e-11,
+  "domain_height_m": 1000000.0,
+  "beta_reference": "center",
+  "variable_count": 52,
+  "correlations_calculated": false,
+  "notes": [
+    "All fields are aligned with the current-frame 20x40 decoder feature maps.",
+    "Zonal derivatives use periodic centered differences.",
+    "Meridional derivatives use nonperiodic second-order NumPy gradients.",
+    "Fx is an explicit alias of the previously used frontogenesis_FT diagnostic."
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "sample_index": 9523,
+  "test_position": 11,
+  "feature_maps_shape": [
+    1,
+    128,
+    20,
+    40
+  ],
+  "pca_input_matrix": "[N*H*W, C]",
+  "n_pcs": 8,
+  "explained_variance_ratio": [
+    0.8952361648965955,
+    0.06030975028029513,
+    0.02003935866481603,
+    0.005065593494436314,
+    0.0027908534048523984,
+    0.002318934209190912,
+    0.0017504250200426588,
+    0.0014131004860594818
+  ],
+  "physics_variables": [
+    "divergence",
+    "dTdx",
+    "dTdy",
+    "frontogenesis_FT",
+    "gradT",
+    "KPPhbl",
+    "Rossby_number",
+    "shear_strain",
+    "speed",
+    "strain",
+    "T",
+    "U",
+    "V",
+    "W",
+    "strain_times_gradT"
+  ]
+}

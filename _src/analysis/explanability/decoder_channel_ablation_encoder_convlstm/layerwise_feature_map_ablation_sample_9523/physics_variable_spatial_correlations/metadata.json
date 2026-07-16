@@ -1,0 +1,10 @@
+{
+  "sample_index": 9523,
+  "physics_variable_count": 52,
+  "layer_count": 7,
+  "channels_per_layer": 100,
+  "correlation": "Pearson spatial correlation",
+  "resolution_method": "Each 20x40 physics field is area-averaged by exact non-overlapping blocks to the native feature-map grid before correlation.",
+  "inference_warning": "Correlations at coarse layers use few spatial cells, especially the 2x5 bottleneck, and should be interpreted descriptively.",
+  "png_only": true
+}

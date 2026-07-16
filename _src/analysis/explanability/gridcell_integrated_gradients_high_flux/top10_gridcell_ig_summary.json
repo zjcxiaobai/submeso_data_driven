@@ -1,0 +1,21 @@
+{
+  "selection": "temporally distributed snapshots from top predicted mean-absolute-flux decile",
+  "flux_quantile": 0.1,
+  "flux_threshold": 5.898700141906739,
+  "num_snapshots": 90,
+  "targets_per_snapshot": [
+    "strong_positive",
+    "strong_negative",
+    "weak"
+  ],
+  "target_count": 270,
+  "steps": 64,
+  "baseline": "zero",
+  "dx_km": 50.0,
+  "dy_km": 50.0,
+  "periodic_x": true,
+  "periodic_y": false,
+  "config": "/scratch/jczhang/submeso_data_driven/_src/configs/unet_encoder_convlstm_shuffle_all_upper_40x20.yaml",
+  "checkpoint": "/scratch/jczhang/submeso_data_driven/_src/outputs_train_on_small_domain/upper_40x20_encoder_convlstm_shuffle_all/checkpoints/best.pt",
+  "output_prefix": "/scratch/jczhang/submeso_data_driven/_src/analysis/explanability/gridcell_integrated_gradients_high_flux/top10_gridcell_ig"
+}
