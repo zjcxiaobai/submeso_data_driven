@@ -30,25 +30,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--predictions",
         type=Path,
-        default=PROJECT_DIR / "outputs_no_shuffle/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm/test_predictions_denorm.npz",
         help="NPZ produced by evaluate.py containing prediction, target, and sample_index.",
     )
     parser.add_argument(
         "--csv-output",
         type=Path,
-        default=PROJECT_DIR / "analysis/spatial_corr/no_shuffle_spatial_corr.csv",
+        default=PROJECT_DIR / "analysis/spatial_corr/no_shuffle_overfitting_test_spatial_corr.csv",
         help="Output CSV for per-snapshot spatial correlations.",
     )
     parser.add_argument(
         "--summary-output",
         type=Path,
-        default=PROJECT_DIR / "analysis/spatial_corr/no_shuffle_spatial_corr_summary.txt",
+        default=PROJECT_DIR / "analysis/spatial_corr/no_shuffle_overfitting_test_spatial_corr_summary.txt",
         help="Output text file with mean and distribution summary.",
     )
     parser.add_argument(
         "--plot-output-prefix",
         type=Path,
-        default=PROJECT_DIR / "analysis/spatial_corr/no_shuffle_spatial_corr",
+        default=PROJECT_DIR / "analysis/spatial_corr/no_shuffle_overfitting_test_spatial_corr",
         help="Output plot prefix without extension.",
     )
     return parser.parse_args()
@@ -184,8 +184,6 @@ def plot_series(path_prefix: Path, sample_index: np.ndarray, rho: np.ndarray, me
     ax.legend(loc="best", handlelength=2.2)
 
     path_prefix.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path_prefix.with_suffix(".svg"), bbox_inches="tight")
-    fig.savefig(path_prefix.with_suffix(".pdf"), bbox_inches="tight")
     fig.savefig(path_prefix.with_suffix(".png"), dpi=600, bbox_inches="tight")
     plt.close(fig)
 
@@ -202,8 +200,6 @@ def main() -> None:
 
     print(f"Saved {args.csv_output}", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
-    print(f"Saved {args.plot_output_prefix.with_suffix('.svg')}", flush=True)
-    print(f"Saved {args.plot_output_prefix.with_suffix('.pdf')}", flush=True)
     print(f"Saved {args.plot_output_prefix.with_suffix('.png')}", flush=True)
     print(f"mean spatial correlation: {summary['mean']:.6f}", flush=True)
 

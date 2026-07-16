@@ -1,0 +1,10 @@
+No-shuffle spatial correlation summary
+count: 1677
+finite_count: 1677
+mean: 0.9222558172
+median: 0.9289071489
+std: 0.03693842676
+min: 0.7099579454
+max: 0.9868102012
+p05: 0.852837746
+p95: 0.9681959811

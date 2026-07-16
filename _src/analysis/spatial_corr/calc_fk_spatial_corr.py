@@ -29,13 +29,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fk-predictions",
         type=Path,
-        default=FK_MLE_DIR / "fk_test_Ce2p13062237_prediction_physical.npz",
+        default=FK_MLE_DIR / "upper_40x20/fk_test_Ce2p13062237_prediction_physical.npz",
         help="FK NPZ containing prediction and sample_index arrays.",
     )
     parser.add_argument(
         "--truth-predictions",
         type=Path,
-        default=PROJECT_DIR / "outputs_no_shuffle_overfitting_test/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm/test_predictions_denorm.npz",
         help="SubmesoFluxNet test NPZ containing the physical-unit target array.",
     )
     parser.add_argument(
@@ -193,8 +193,6 @@ def plot_series(path_prefix: Path, sample_index: np.ndarray, rho: np.ndarray, me
     ax.legend(loc="best", handlelength=2.2)
 
     path_prefix.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path_prefix.with_suffix(".svg"), bbox_inches="tight")
-    fig.savefig(path_prefix.with_suffix(".pdf"), bbox_inches="tight")
     fig.savefig(path_prefix.with_suffix(".png"), dpi=600, bbox_inches="tight")
     plt.close(fig)
 
@@ -211,8 +209,6 @@ def main() -> None:
 
     print(f"Saved {args.csv_output}", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
-    print(f"Saved {args.plot_output_prefix.with_suffix('.svg')}", flush=True)
-    print(f"Saved {args.plot_output_prefix.with_suffix('.pdf')}", flush=True)
     print(f"Saved {args.plot_output_prefix.with_suffix('.png')}", flush=True)
     print(f"mean spatial correlation: {summary['mean']:.6f}", flush=True)
 

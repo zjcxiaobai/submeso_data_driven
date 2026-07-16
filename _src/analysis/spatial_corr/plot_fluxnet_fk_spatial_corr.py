@@ -43,6 +43,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=HERE / "fluxnet_fk_spatial_corr_summary.txt",
     )
+    parser.add_argument("--fk-display-label", default="FK", help="Display label for the FK/MLE baseline in plots and summaries.")
     return parser.parse_args()
 
 
@@ -127,13 +128,16 @@ def write_summary(
     sample: np.ndarray,
     flux_summary: dict[str, float | int],
     fk_summary: dict[str, float | int],
+    fk_label: str,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
-        handle.write("SubmesoFluxNet versus FK spatial correlation\n")
+        handle.write(f"SubmesoFluxNet versus {fk_label} spatial correlation\n")
+        handle.write(f"comparison_scope: sample_index intersection of {fk_label} and SubmesoFluxNet spatial-correlation CSVs\n")
+        handle.write(f"note: SubmesoFluxNet is restricted to the same {fk_label}-available subset before statistics are computed\n")
         handle.write(f"sample_index_range: {int(sample.min())}-{int(sample.max())}\n")
         handle.write(f"n_common_snapshots: {sample.size}\n")
-        for label, vals in (("SubmesoFluxNet", flux_summary), ("FK", fk_summary)):
+        for label, vals in (("SubmesoFluxNet", flux_summary), (fk_label, fk_summary)):
             handle.write(f"\n{label}\n")
             for key, value in vals.items():
                 if isinstance(value, int):
@@ -144,11 +148,7 @@ def write_summary(
 
 def save_figure(fig: plt.Figure, output_prefix: Path) -> None:
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        kwargs = {"bbox_inches": "tight"}
-        if ext in {".png", ".tiff"}:
-            kwargs["dpi"] = 600
-        fig.savefig(Path(f"{output_prefix}{ext}"), **kwargs)
+    fig.savefig(Path(f"{output_prefix}.png"), dpi=600, bbox_inches="tight")
 
 
 def draw_figure(
@@ -158,27 +158,29 @@ def draw_figure(
     flux_summary: dict[str, float | int],
     fk_summary: dict[str, float | int],
     output_prefix: Path,
+    fk_label: str,
 ) -> None:
     apply_style()
     fig, ax = plt.subplots(figsize=(4.85, 2.55), constrained_layout=True)
+    sample_number = np.arange(sample.size, dtype=np.int64)
 
     ax.plot(
-        sample,
+        sample_number,
         flux_corr,
         color=PALETTE["fluxnet"],
         linewidth=0.95,
         label=fr"SubmesoFluxNet, mean $\rho$={float(flux_summary['mean']):.3f}",
     )
     ax.plot(
-        sample,
+        sample_number,
         fk_corr,
         color=PALETTE["fk"],
         linewidth=0.95,
-        label=fr"FK, mean $\rho$={float(fk_summary['mean']):.3f}",
+        label=fr"{fk_label}, mean $\rho$={float(fk_summary['mean']):.3f}",
     )
-    ax.set_xlim(int(sample.min()), int(sample.max()))
+    ax.set_xlim(0, int(sample_number.max()))
     ax.set_ylim(0.0, 1.0)
-    ax.set_xlabel("Held-out test data index")
+    ax.set_xlabel("Held-out test sample number")
     ax.set_ylabel(r"Spatial correlation $\rho_n$")
     ax.set_title("Spatial pattern correlation", fontsize=7.5, pad=4)
     ax.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.45, alpha=0.55)
@@ -205,14 +207,13 @@ def main() -> None:
     flux_summary = summary(flux_aligned)
     fk_summary = summary(fk_aligned)
 
-    draw_figure(sample, flux_aligned, fk_aligned, flux_summary, fk_summary, args.output_prefix)
-    write_summary(args.summary_output, sample, flux_summary, fk_summary)
+    draw_figure(sample, flux_aligned, fk_aligned, flux_summary, fk_summary, args.output_prefix, args.fk_display_label)
+    write_summary(args.summary_output, sample, flux_summary, fk_summary, args.fk_display_label)
 
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        print(f"Saved {args.output_prefix}{ext}", flush=True)
+    print(f"Saved {args.output_prefix}.png", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
     print(f"SubmesoFluxNet mean spatial corr: {float(flux_summary['mean']):.6f}", flush=True)
-    print(f"FK mean spatial corr: {float(fk_summary['mean']):.6f}", flush=True)
+    print(f"{args.fk_display_label} mean spatial corr: {float(fk_summary['mean']):.6f}", flush=True)
 
 
 if __name__ == "__main__":
