@@ -36,6 +36,10 @@ CASES = {
     "no_shuffle": PROJECT_DIR / "configs/unet_no_shuffle.yaml",
     "shuffle_train_val": PROJECT_DIR / "configs/unet_shuffle_train_val.yaml",
     "shuffle_all": PROJECT_DIR / "configs/unet_shuffle_all.yaml",
+    "encoder_convlstm_upper_40x20": PROJECT_DIR / "configs/unet_encoder_convlstm_no_shuffle_upper_40x20.yaml",
+    "encoder_convlstm_shuffle_all_upper_40x20": (
+        PROJECT_DIR / "configs/unet_encoder_convlstm_shuffle_all_upper_40x20.yaml"
+    ),
 }
 
 DEFAULT_FEATURE_NAMES = [
@@ -136,7 +140,7 @@ def sample_r2_torch(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
 
 def replace_feature_with_training_mean(
     x: torch.Tensor,
-    feature_index: int,
+    channel_indices: list[int],
     *,
     stats,
     normalize_x: bool,
@@ -144,11 +148,29 @@ def replace_feature_with_training_mean(
 ) -> torch.Tensor:
     x_ablated = x.clone()
     if normalize_x:
-        replacement = torch.tensor(0.0, dtype=x.dtype, device=device)
+        replacement = torch.zeros((len(channel_indices), 1, 1), dtype=x.dtype, device=device)
     else:
-        replacement = torch.as_tensor(stats.x_mean[feature_index], dtype=x.dtype, device=device)
-    x_ablated[:, feature_index, :, :] = replacement
+        replacement = torch.as_tensor(stats.x_mean[channel_indices], dtype=x.dtype, device=device)
+    x_ablated[:, channel_indices, :, :] = replacement
     return x_ablated
+
+
+def feature_channel_groups(config: dict, feature_names: list[str] | None) -> tuple[list[str], list[list[int]]]:
+    n_model_channels = int(config["model"]["in_channels"])
+    frame_channels = int(config["model"].get("frame_channels", n_model_channels))
+    if n_model_channels % frame_channels != 0:
+        raise ValueError(f"in_channels={n_model_channels} is not divisible by frame_channels={frame_channels}")
+
+    names = feature_names or DEFAULT_FEATURE_NAMES[:frame_channels]
+    if len(names) != frame_channels:
+        raise ValueError(f"Expected {frame_channels} feature names, got {len(names)}")
+
+    n_frames = n_model_channels // frame_channels
+    channel_groups = [
+        [frame * frame_channels + feature_index for frame in range(n_frames)]
+        for feature_index in range(frame_channels)
+    ]
+    return names, channel_groups
 
 
 def run_case(
@@ -165,12 +187,13 @@ def run_case(
     checkpoint_path = Path(config["train"]["best_checkpoint"])
     if batch_size is not None:
         config["data"]["batch_size"] = batch_size
+    config["data"]["num_workers"] = 0
+    if get_device(device_override or config.get("device", "auto")).type == "cpu":
+        config["data"]["pin_memory"] = False
 
     _, _, test_loader, stats = build_dataloaders(config, PROJECT_DIR, int(config.get("seed", 42)))
-    n_features = int(config["model"]["in_channels"])
-    names = feature_names or DEFAULT_FEATURE_NAMES[:n_features]
-    if len(names) != n_features:
-        raise ValueError(f"Expected {n_features} feature names, got {len(names)}")
+    names, channel_groups = feature_channel_groups(config, feature_names)
+    n_features = len(channel_groups)
 
     model = build_model(config["model"]).to(device)
     print(f"Loading trained checkpoint for {format_case_name(case)}: {checkpoint_path}", flush=True)
@@ -202,18 +225,17 @@ def run_case(
             baseline_pred = model(x)
             baseline_batches.append(sample_r2_torch(baseline_pred, y).cpu().numpy())
 
-            for feature_index in range(n_features):
+            for feature_index, channel_indices in enumerate(channel_groups):
                 x_ablated = replace_feature_with_training_mean(
                     x,
-                    feature_index,
+                    channel_indices,
                     stats=stats,
                     normalize_x=normalize_x,
                     device=device,
                 )
                 ablated_pred = model(x_ablated)
                 feature_batches[feature_index].append(sample_r2_torch(ablated_pred, y).cpu().numpy())
-            if batch_number % 25 == 0 or offset == len(dataset_indices):
-                print(f"  {format_case_name(case)}: processed {offset}/{len(dataset_indices)} samples", flush=True)
+            print(f"  {format_case_name(case)}: processed {offset}/{len(dataset_indices)} samples", flush=True)
 
     sample_index = np.concatenate(sample_indices)
     baseline_r2 = np.concatenate(baseline_batches)
