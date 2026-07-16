@@ -1,0 +1,73 @@
+{
+  "run_dir": "/scratch/jczhang/MITgcm_baroclinic_instability_old/MITgcm/verification/tutorial_reentrant_channel/run",
+  "iteration": 26687088,
+  "k_index": 2,
+  "box_j": 10,
+  "box_i": 10,
+  "bathy_stride": 4,
+  "fine_grid_shape_j_i": [
+    1200,
+    600
+  ],
+  "coarse_grid_shape_j_i": [
+    120,
+    60
+  ],
+  "physical_extent_km": {
+    "x_min": 2.5,
+    "x_max": 2997.5,
+    "y_min": 2.5,
+    "y_max": 5997.5
+  },
+  "depth_m": {
+    "min_positive": 1982.2867431640625,
+    "max": 3982.2607421875
+  },
+  "color_limits": {
+    "temperature": [
+      2.664131941795349,
+      5.901534576416015
+    ],
+    "heat_flux_symmetric_wm2": 37.41257207220427
+  },
+  "bathymetry_box_z0_km": {
+    "x_min": 25.0,
+    "x_max": 2975.0,
+    "y_min": 3025.0,
+    "y_max": 5975.0,
+    "source": "middle-column northern-half submesoscale heat-flux panel"
+  },
+  "domains": [
+    {
+      "name": "analysis: upper 40x20",
+      "j_start": 30,
+      "j_stop": 50,
+      "i_start": 10,
+      "i_stop": 50,
+      "color": "#D95F02",
+      "source_panel": "northern-half submesoscale heat flux",
+      "crop_j_start": 30,
+      "crop_j_stop": 50,
+      "crop_i_start": 10,
+      "crop_i_stop": 50,
+      "plotted_field": "submesoscale heat flux"
+    },
+    {
+      "name": "evaluation: lower 40x20",
+      "j_start": 10,
+      "j_stop": 30,
+      "i_start": 10,
+      "i_stop": 50,
+      "color": "#1B9E77",
+      "source_panel": "northern-half submesoscale heat flux",
+      "crop_j_start": 10,
+      "crop_j_stop": 30,
+      "crop_i_start": 10,
+      "crop_i_stop": 50,
+      "plotted_field": "submesoscale heat flux"
+    }
+  ],
+  "outputs": [
+    "/scratch/jczhang/submeso_data_driven/_src/analysis/dynamics/dynamics_snapshot.png"
+  ]
+}
