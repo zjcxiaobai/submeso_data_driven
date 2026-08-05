@@ -226,6 +226,7 @@ def draw_figure(
 
     mean_r2 = float(summary["mean"])
     median_r2 = float(summary["median"])
+    std_r2 = float(summary["std"])
     p05 = float(summary["p05"])
     p95 = float(summary["p95"])
 
@@ -245,7 +246,7 @@ def draw_figure(
     ax_ts.text(
         x_text,
         y_text,
-        fr"mean $R^2$={mean_r2:.3f}",
+        fr"Mean $R^2$={mean_r2:.3f}; Standard Deviation={std_r2:.3f}",
         ha="left",
         va="bottom",
         color=PALETTE["neutral_dark"],

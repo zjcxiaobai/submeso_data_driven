@@ -1,8 +1,4 @@
-#!/usr/bin/env python3
-from __future__ import annotations
-
 from pathlib import Path
-
 from plot_no_shuffle_overfitting_r2 import draw_figure, finite_summary, lowest_window, read_r2_series, rolling_median
 from plot_no_shuffle_overfitting_r2 import write_stats_csv, write_summary
 
@@ -38,7 +34,7 @@ def main() -> None:
     print(f"Saved {output_prefix.with_suffix('.png')}", flush=True)
     print(f"Saved {summary_output}", flush=True)
     print(f"Saved {stats_csv}", flush=True)
-    print(f"mean R2: {summary['mean']:.6f}", flush=True)
+    print(f"Mean R2: {summary['mean']:.6f}", flush=True)
 
 
 if __name__ == "__main__":
