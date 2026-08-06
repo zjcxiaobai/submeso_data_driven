@@ -29,7 +29,7 @@ except ImportError as exc:  # pragma: no cover - environment guard
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[3]
-DEFAULT_SOURCE_DIR = PROJECT_DIR / "src/post_analysis/05_Generalization_test"
+DEFAULT_SOURCE_DIR = PROJECT_DIR / "data/mld"
 HERE = Path(__file__).resolve().parent
 
 DEFAULT_CROPS = {
@@ -54,26 +54,26 @@ class CorrelationResult:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Compute correlations between potential temperature and TEOS-10 density. "
-            "Defaults point to the generalization-test NetCDF files."
+            "Compute correlations among potential temperature, salinity, and TEOS-10 density. "
+            "Defaults point to the mixed-layer averaged NPZ files in data/mld."
         )
     )
     parser.add_argument(
         "--t-path",
         type=Path,
-        default=DEFAULT_SOURCE_DIR / "T_12hmean_coarse.nc",
+        default=DEFAULT_SOURCE_DIR / "T.npz",
         help="Potential-temperature file. Supports NetCDF, .npz with data, or .npy.",
     )
     parser.add_argument(
         "--s-path",
         type=Path,
-        default=DEFAULT_SOURCE_DIR / "S_12hmean_coarse.nc",
+        default=DEFAULT_SOURCE_DIR / "S.npz",
         help="Practical-salinity file. Supports NetCDF, .npz with data, or .npy.",
     )
     parser.add_argument(
         "--eta-path",
         type=Path,
-        default=DEFAULT_SOURCE_DIR / "Eta_12hmean_coarse.nc",
+        default=None,
         help="Optional sea-surface-height file used only when depth coordinates are available.",
     )
     parser.add_argument("--t-var", default=None, help="Variable name in the T NetCDF file.")
@@ -132,7 +132,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=HERE / "T_rho_correlation",
+        default=HERE / "T_S_rho_correlation",
         help="Output prefix for CSV and JSON summaries.",
     )
     return parser.parse_args()
@@ -370,23 +370,43 @@ def main() -> None:
         lat=float(args.lat),
         lon=float(args.lon),
     )
-    temperature, rho = xr.align(temperature, rho, join="inner")
+    temperature, salinity, rho = xr.align(temperature, salinity, rho, join="inner")
+
+    t_anom = spatial_anomaly(temperature)
+    s_anom = spatial_anomaly(salinity)
+    rho_anom = spatial_anomaly(rho)
 
     rows = [
+        corr_result("T_vs_S_raw", temperature, salinity),
         corr_result("T_vs_rho_raw", temperature, rho),
         corr_result("minus_T_vs_rho_raw", -temperature, rho),
-        corr_result("T_anomaly_vs_rho_anomaly", spatial_anomaly(temperature), spatial_anomaly(rho)),
-        corr_result("minus_T_anomaly_vs_rho_anomaly", -spatial_anomaly(temperature), spatial_anomaly(rho)),
+        corr_result("S_vs_rho_raw", salinity, rho),
+        corr_result("T_anomaly_vs_S_anomaly", t_anom, s_anom),
+        corr_result("T_anomaly_vs_rho_anomaly", t_anom, rho_anom),
+        corr_result("minus_T_anomaly_vs_rho_anomaly", -t_anom, rho_anom),
+        corr_result("S_anomaly_vs_rho_anomaly", s_anom, rho_anom),
     ]
 
     if args.include_gradients:
         rows.extend(
             [
+                corr_result("grad_abs_T_vs_grad_abs_S", gradient_magnitude(temperature), gradient_magnitude(salinity)),
                 corr_result("grad_abs_T_vs_grad_abs_rho", gradient_magnitude(temperature), gradient_magnitude(rho)),
+                corr_result("grad_abs_S_vs_grad_abs_rho", gradient_magnitude(salinity), gradient_magnitude(rho)),
+                corr_result(
+                    "grad_abs_T_anomaly_vs_grad_abs_S_anomaly",
+                    gradient_magnitude(t_anom),
+                    gradient_magnitude(s_anom),
+                ),
                 corr_result(
                     "grad_abs_T_anomaly_vs_grad_abs_rho_anomaly",
-                    gradient_magnitude(spatial_anomaly(temperature)),
-                    gradient_magnitude(spatial_anomaly(rho)),
+                    gradient_magnitude(t_anom),
+                    gradient_magnitude(rho_anom),
+                ),
+                corr_result(
+                    "grad_abs_S_anomaly_vs_grad_abs_rho_anomaly",
+                    gradient_magnitude(s_anom),
+                    gradient_magnitude(rho_anom),
                 ),
             ]
         )
@@ -406,6 +426,7 @@ def main() -> None:
         "lat": float(args.lat),
         "lon": float(args.lon),
         "temperature_shape": list(temperature.shape),
+        "salinity_shape": list(salinity.shape),
         "density_shape": list(rho.shape),
         "results": [row.__dict__ for row in rows],
     }
@@ -413,7 +434,7 @@ def main() -> None:
         json.dump(summary, handle, indent=2)
         handle.write("\n")
 
-    print("Temperature-density correlation results")
+    print("Temperature-salinity-density correlation results")
     for row in rows:
         print(f"{row.name}: r={row.pearson:+.6f}, |r|={row.abs_pearson:.6f}, n={row.n}")
     print(f"Saved CSV: {csv_path}")

@@ -1,0 +1,75 @@
+{
+  "temperature_path": "/scratch/jczhang/submeso_data_driven/data/mld/T.npz",
+  "salinity_path": "/scratch/jczhang/submeso_data_driven/data/mld/S.npz",
+  "eta_path": null,
+  "temperature_channel": null,
+  "crop": "none",
+  "pressure_dbar_fallback": 0.0,
+  "lat": -55.0,
+  "lon": 153.0,
+  "temperature_shape": [
+    12231,
+    56,
+    56
+  ],
+  "salinity_shape": [
+    12231,
+    56,
+    56
+  ],
+  "density_shape": [
+    12231,
+    56,
+    56
+  ],
+  "results": [
+    {
+      "name": "T_vs_S_raw",
+      "n": 38356416,
+      "pearson": 0.8665564930266971,
+      "abs_pearson": 0.8665564930266971
+    },
+    {
+      "name": "T_vs_rho_raw",
+      "n": 38356416,
+      "pearson": -0.81046285472813,
+      "abs_pearson": 0.81046285472813
+    },
+    {
+      "name": "minus_T_vs_rho_raw",
+      "n": 38356416,
+      "pearson": 0.81046285472813,
+      "abs_pearson": 0.81046285472813
+    },
+    {
+      "name": "S_vs_rho_raw",
+      "n": 38356416,
+      "pearson": -0.4141263592866199,
+      "abs_pearson": 0.4141263592866199
+    },
+    {
+      "name": "T_anomaly_vs_S_anomaly",
+      "n": 38356416,
+      "pearson": 0.8600862466909728,
+      "abs_pearson": 0.8600862466909728
+    },
+    {
+      "name": "T_anomaly_vs_rho_anomaly",
+      "n": 38356416,
+      "pearson": -0.8118364736762084,
+      "abs_pearson": 0.8118364736762084
+    },
+    {
+      "name": "minus_T_anomaly_vs_rho_anomaly",
+      "n": 38356416,
+      "pearson": 0.8118364736762084,
+      "abs_pearson": 0.8118364736762084
+    },
+    {
+      "name": "S_anomaly_vs_rho_anomaly",
+      "n": 38356416,
+      "pearson": -0.40456979506108004,
+      "abs_pearson": 0.40456979506108004
+    }
+  ]
+}
