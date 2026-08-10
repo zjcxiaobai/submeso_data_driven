@@ -1,9 +1,0 @@
-FK hyperparameter R2 sensitivity
-ce_csv: ce_random_search_lfmin1000_history.csv
-lfmin_csv: grid_search_LfMin.csv
-ce_metric: mean_per_snapshot_r2
-lfmin_metric: val_r2_scaled_to_Ce_max
-best_C_e: 2.13062237
-best_C_e_R2: 0.1960656392
-best_LfMin: 1
-best_LfMin_R2: 0.1960656392
