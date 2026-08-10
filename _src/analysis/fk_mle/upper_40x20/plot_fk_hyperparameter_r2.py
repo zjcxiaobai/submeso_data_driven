@@ -102,13 +102,15 @@ def draw_panel(
     ylabel: str,
     title: str,
     xscale: str = "linear",
+    fill_under: bool = True,
 ) -> tuple[float, float]:
     bx, by = best_point(x, y)
     if x.size > 25:
         ax.scatter(x, y, s=13, color=color, alpha=0.62, linewidths=0, zorder=2)
     else:
         ax.plot(x, y, color=color, linewidth=1.25, marker="o", markersize=3.0, zorder=2)
-        ax.fill_between(x, y, np.nanmin(y), color=fill, alpha=0.38, linewidth=0, zorder=1)
+        if fill_under:
+            ax.fill_between(x, y, np.nanmin(y), color=fill, alpha=0.38, linewidth=0, zorder=1)
     ax.scatter([bx], [by], s=24, color=color, edgecolor="white", linewidth=0.55, zorder=4)
     ax.set_xscale(xscale)
     ax.set_xlabel(xlabel)
@@ -122,11 +124,7 @@ def draw_panel(
 
 def save_figure(fig: plt.Figure, output_prefix: Path) -> None:
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        kwargs = {"bbox_inches": "tight"}
-        if ext in {".png", ".tiff"}:
-            kwargs["dpi"] = 600
-        fig.savefig(Path(f"{output_prefix}{ext}"), **kwargs)
+    fig.savefig(Path(f"{output_prefix}.png"), dpi=600, bbox_inches="tight")
 
 
 def write_summary(
@@ -178,14 +176,14 @@ def main() -> None:
         ylabel="",
         title=r"$L_{f,\min}$ sensitivity",
         xscale="log",
+        fill_under=False,
     )
 
     save_figure(fig, args.output_prefix)
     plt.close(fig)
     write_summary(args.summary_output, args.ce_csv, args.lfmin_csv, args.ce_y, args.lfmin_y, ce_best, lf_best)
 
-    for ext in (".svg", ".pdf", ".png", ".tiff"):
-        print(f"Saved {args.output_prefix}{ext}", flush=True)
+    print(f"Saved {args.output_prefix}.png", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
     print(f"Best C_e: {ce_best[0]:.8g}, R2={ce_best[1]:.6f}", flush=True)
     print(f"Best LfMin: {lf_best[0]:.8g}, R2={lf_best[1]:.6f}", flush=True)

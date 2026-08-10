@@ -405,10 +405,7 @@ def plot_r2(args: argparse.Namespace) -> None:
     ax_hist.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.35, alpha=0.42)
 
     args.output_prefix.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.output_prefix.with_suffix(".svg"), bbox_inches="tight")
-    fig.savefig(args.output_prefix.with_suffix(".pdf"), bbox_inches="tight")
     fig.savefig(args.output_prefix.with_suffix(".png"), dpi=600, bbox_inches="tight")
-    fig.savefig(args.output_prefix.with_suffix(".tiff"), dpi=600, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved R2 CSV: {args.r2_csv}", flush=True)
     print(f"Saved R2 figure: {args.output_prefix.with_suffix('.png')}", flush=True)

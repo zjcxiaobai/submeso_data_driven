@@ -15,7 +15,7 @@ FK_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20"
 def add_default_args() -> None:
     defaults = {
         "--fluxnet-r2": PROJECT_DIR
-        / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm_shuffle_all/test_r2_series.csv",
+        / "analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_r2_series.csv",
         "--fk-r2": FK_DIR / "fk_shuffle_all_test_Ce2p13062237_r2_series.csv",
         "--output-prefix": ANALYSIS_DIR / "shuffle_all_fk_vs_submesofluxnet_per_snapshot_r2",
         "--summary-output": ANALYSIS_DIR / "shuffle_all_fk_vs_submesofluxnet_per_snapshot_r2_summary.txt",
