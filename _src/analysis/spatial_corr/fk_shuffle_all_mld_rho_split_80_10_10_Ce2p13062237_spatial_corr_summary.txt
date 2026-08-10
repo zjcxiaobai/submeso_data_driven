@@ -1,0 +1,12 @@
+FK spatial correlation summary
+fk_predictions: /scratch/jczhang/submeso_data_driven/_src/analysis/fk_mle/upper_40x20/fk_shuffle_all_test_Ce2p13062237_prediction_physical.npz
+truth_predictions: /scratch/jczhang/submeso_data_driven/_src/analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_predictions_denorm.npz
+count: 575
+finite_count: 575
+mean: 0.2239761112
+median: 0.2122722019
+std: 0.1047689359
+min: -0.04648263949
+max: 0.58900883
+p05: 0.06851632477
+p95: 0.4127368822

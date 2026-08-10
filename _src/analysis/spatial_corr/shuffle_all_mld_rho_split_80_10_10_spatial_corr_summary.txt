@@ -1,0 +1,11 @@
+SubmesoFluxNet spatial correlation summary
+predictions: /scratch/jczhang/submeso_data_driven/_src/analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_predictions_denorm.npz
+count: 1147
+finite_count: 1147
+mean: 0.9255897826
+median: 0.9302667856
+std: 0.03533741411
+min: 0.7551487017
+max: 0.9869194388
+p05: 0.8547290779
+p95: 0.972119107
