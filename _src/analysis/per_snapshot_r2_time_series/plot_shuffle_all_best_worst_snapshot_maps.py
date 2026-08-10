@@ -11,10 +11,10 @@ OUT_DIR = PROJECT_DIR / "analysis/per_snapshot_r2_time_series"
 
 
 def main() -> None:
-    predictions = PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm_shuffle_all/test_predictions_denorm.npz"
-    r2_series = PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm_shuffle_all/test_r2_series.csv"
-    output_prefix = OUT_DIR / "shuffle_all_encoder_convlstm_best_worst_maps"
-    summary_output = OUT_DIR / "shuffle_all_encoder_convlstm_best_worst_maps_summary.txt"
+    predictions = PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_predictions_denorm.npz"
+    r2_series = PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_r2_series.csv"
+    output_prefix = OUT_DIR / "shuffle_all_mld_rho_split_80_10_10_best_worst_maps"
+    summary_output = OUT_DIR / "shuffle_all_mld_rho_split_80_10_10_best_worst_maps_summary.txt"
 
     r2_rows = read_r2_rows(r2_series)
     best, worst = select_cases(r2_rows, predictions)

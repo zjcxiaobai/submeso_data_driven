@@ -35,7 +35,7 @@ FIELD_STYLES = (
     FieldStyle("vorticity", "Relative vorticity", "s$^{-1}$", "RdBu_r", True),
     FieldStyle("strain", "Strain rate", "s$^{-1}$", "viridis", False),
     FieldStyle("T", "Potential temperature", "$^\\circ$C", "magma", False),
-    FieldStyle("speed", "Horizontal speed", "m s$^{-1}$", "viridis", False),
+    FieldStyle("rho", "Density", "kg m$^{-3}$", "plasma", False),
     FieldStyle("kpphbl", "KPP boundary layer depth", "m", "YlGnBu", False),
 )
 
@@ -58,14 +58,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--x-path",
         type=Path,
-        default=PROJECT_DIR / "data/train_on_small_domain/upper_40x20/X.npy",
-        help="Path to raw X.npy. Default is the upper_40x20 training-domain input array.",
+        default=PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/data/X.npy",
+        help="Path to raw X.npy. Default is the upper_40x20 rho/no-speed input array.",
     )
     parser.add_argument(
         "--y-path",
         type=Path,
-        default=PROJECT_DIR / "data/train_on_small_domain/upper_40x20/y.npy",
-        help="Path to raw y.npy target array. Default is the upper_40x20 submesoscale heat flux.",
+        default=PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/data/y.npy",
+        help="Path to raw y.npy target array. Default is the upper_40x20 rho/no-speed submesoscale heat flux.",
     )
     parser.add_argument(
         "--time-index",

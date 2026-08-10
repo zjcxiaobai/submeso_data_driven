@@ -260,7 +260,7 @@ def draw_figure(
 def write_summary(path: Path, best: SnapshotCase, worst: SnapshotCase) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
-        handle.write("Best and worst no-shuffle overfitting-test snapshots\n")
+        handle.write("Best and worst per-snapshot test cases\n")
         handle.write("error_definition: normalized_squared_error = ((prediction - truth) / std(truth_snapshot))^2\n")
         for case in (best, worst):
             err = normalized_squared_error(case.prediction, case.target)
