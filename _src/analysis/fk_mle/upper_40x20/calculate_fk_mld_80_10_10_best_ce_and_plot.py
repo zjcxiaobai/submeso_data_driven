@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Compute tuned-Ce FK heat flux on the no-shuffle test set and plot R2.
+"""Compute tuned-Ce FK heat flux for the MLD-rho 80/10/10 shuffle test set.
 
-Default tuned value:
-    C_e = 2.13062237
+This combined script replaces the old split between calculate_test_* and
+calculate_shuffle_all_* for the new experiment. It defaults to the saved
+SubmesoFluxNet 80/10/10 test predictions, computes FK on the same sample order,
+saves physical-unit FK predictions, and plots/writes per-snapshot R2.
 
-Outputs are physical-unit heat flux in W m^-2. The calculation is resumable via
-the full-grid progress NPZ; rerun the same command after interruption.
+Update --c-e after running tune_ce_random_search.py on the matching training set.
+The FK calculation is resumable via the full-grid progress NPZ; rerun the same
+command after interruption.
 """
 
 from __future__ import annotations
@@ -25,7 +28,7 @@ import xarray as xr
 PROJECT_DIR = Path(__file__).resolve().parents[3]
 REPO_ROOT = PROJECT_DIR.parent
 PER_SNAPSHOT_DIR = PROJECT_DIR / "analysis/per_snapshot_r2_time_series"
-OUT_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20"
+OUT_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20/mld_rho_split_80_10_10"
 
 if str(PER_SNAPSHOT_DIR) not in sys.path:
     sys.path.insert(0, str(PER_SNAPSHOT_DIR))
@@ -36,7 +39,7 @@ from fk_physics import compute_fk_submeso_heat_flux_one_time  # noqa: E402
 from src.utils import build_coarse_grid, read_mitgcm  # noqa: E402
 
 
-BEST_CE = 2.13062237
+BEST_CE = 2.13062237  # Replace with the tuned value from this 80/10/10 training split.
 
 
 PALETTE = {
@@ -53,8 +56,8 @@ PALETTE = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--c-e", type=float, default=BEST_CE)
-    parser.add_argument("--predictions", type=Path, default=PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm/test_predictions_denorm.npz")
-    parser.add_argument("--wt", type=Path, default=REPO_ROOT / "data/mld/wT.npz")
+    parser.add_argument("--predictions", type=Path, default=PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_predictions_denorm.npz")
+    parser.add_argument("--time-source", type=Path, default=PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/data/time_index.npy")
     parser.add_argument(
         "--grid-run-dir",
         type=Path,
@@ -64,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--box-i", type=int, default=10)
     parser.add_argument("--nc-dir", type=Path, default=Path("/scratch/jczhang/data_5km/save_coarse/13901616_nc"))
     parser.add_argument("--engine", default="h5netcdf", choices=("h5netcdf", "netcdf4", "scipy"))
-    parser.add_argument("--crop", type=int, nargs=4, default=(92, 112, 12, 52), metavar=("J0", "J1", "I0", "I1"))
+    parser.add_argument("--crop", type=int, nargs=4, default=(92, 112, 12, 52), metavar=("J0", "J1", "I0", "I1"), help="Crop on the 120x60 FK grid matching upper40x20: 56x56 y=30:50, x=10:50.")
     parser.add_argument("--lf-min", type=float, default=1000.0)
     parser.add_argument("--submeso-lmax", type=float, default=2751.0)
     parser.add_argument("--submeso-inv-tau", type=float, default=2.0e-6)
@@ -83,21 +86,26 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Save/plot the currently available progress snapshots even if the full test set is incomplete.",
     )
-    parser.add_argument("--progress", type=Path, default=OUT_DIR / "fk_test_Ce2p13062237_progress_fullgrid.npz")
-    parser.add_argument("--output", type=Path, default=OUT_DIR / "fk_test_Ce2p13062237_prediction_physical.npz")
-    parser.add_argument("--r2-csv", type=Path, default=OUT_DIR / "fk_test_Ce2p13062237_r2_series.csv")
-    parser.add_argument("--output-prefix", type=Path, default=OUT_DIR / "fk_test_Ce2p13062237_per_snapshot_r2")
-    parser.add_argument("--summary-output", type=Path, default=OUT_DIR / "fk_test_Ce2p13062237_per_snapshot_r2_summary.txt")
-    parser.add_argument("--stats-csv", type=Path, default=OUT_DIR / "fk_test_Ce2p13062237_per_snapshot_r2_stats.csv")
+    parser.add_argument("--progress", type=Path, default=OUT_DIR / "fk_progress_fullgrid.npz")
+    parser.add_argument("--output", type=Path, default=OUT_DIR / "fk_prediction_physical.npz")
+    parser.add_argument("--r2-csv", type=Path, default=OUT_DIR / "fk_r2_series.csv")
+    parser.add_argument("--output-prefix", type=Path, default=OUT_DIR / "fk_per_snapshot_r2")
+    parser.add_argument("--summary-output", type=Path, default=OUT_DIR / "fk_per_snapshot_r2_summary.txt")
+    parser.add_argument("--stats-csv", type=Path, default=OUT_DIR / "fk_per_snapshot_r2_stats.csv")
     parser.add_argument("--rolling-window", type=int, default=81)
     return parser.parse_args()
 
 
-def load_test_times(predictions_path: Path, wt_path: Path) -> tuple[np.ndarray, np.ndarray]:
+def load_test_times(predictions_path: Path, time_source_path: Path) -> tuple[np.ndarray, np.ndarray]:
     pred = np.load(predictions_path)
-    wt = np.load(wt_path)
+    time_source = np.load(time_source_path)
     sample_index = pred["sample_index"].astype(np.int64)
-    time_index = wt["time_index"].astype(np.int64)[sample_index]
+    if isinstance(time_source, np.lib.npyio.NpzFile):
+        key = "time_index" if "time_index" in time_source.files else "time"
+        all_time = time_source[key].astype(np.int64)
+    else:
+        all_time = np.asarray(time_source, dtype=np.int64)
+    time_index = all_time[sample_index]
     return sample_index, time_index
 
 
@@ -338,7 +346,7 @@ def write_stats(path: Path, summary: dict[str, float | int], overall: float) -> 
 def write_summary(path: Path, args: argparse.Namespace, sample_index: np.ndarray, time_index: np.ndarray, summary: dict[str, float | int], overall: float) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
-        handle.write("Tuned-Ce FK no-shuffle test R2 summary\n")
+        handle.write("Tuned-Ce FK MLD-rho 80/10/10 shuffle test R2 summary\n")
         handle.write(f"C_e: {args.c_e:.10g}\n")
         handle.write(f"sample_index_range: {int(sample_index.min())}-{int(sample_index.max())}\n")
         handle.write(f"time_index_range: {int(time_index.min())}-{int(time_index.max())}\n")
@@ -390,7 +398,7 @@ def plot_r2(args: argparse.Namespace) -> None:
     ax_ts.set_ylim(float(np.nanmin(r2)) - 0.04, min(1.0, float(np.nanmax(r2)) + 0.04))
     ax_ts.set_xlabel("Held-out test data index")
     ax_ts.set_ylabel(r"Per-snapshot $R^2$")
-    ax_ts.set_title(fr"FK test $R^2$, $C_e$={args.c_e:.4g}", fontsize=7.5, pad=4)
+    ax_ts.set_title(fr"FK MLD-rho test $R^2$, $C_e$={args.c_e:.4g}", fontsize=7.5, pad=4)
     ax_ts.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.4, alpha=0.5)
     ax_ts.text(0.012, 0.96, fr"mean $R^2$={mean_r2:.3f}", transform=ax_ts.transAxes, ha="left", va="top", fontsize=6.5)
 
@@ -415,7 +423,7 @@ def plot_r2(args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = parse_args()
-    sample_index, target_time = load_test_times(args.predictions, args.wt)
+    sample_index, target_time = load_test_times(args.predictions, args.time_source)
     print(f"Test snapshots: {sample_index.size}", flush=True)
     print(f"Test time range: {int(target_time.min())} ... {int(target_time.max())}", flush=True)
     print(f"Using tuned C_e={args.c_e}", flush=True)

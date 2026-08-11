@@ -1,0 +1,11 @@
+seed: 42
+
+data:
+  y_path: analysis/shuffle_upper40x20_mld_rho/data/y.npy
+  split:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+    shuffle: true
+    shuffle_train_val: false
+  temporal_offsets: [-8, -7, -6, -5, -4, -3, -2, -1, 0]

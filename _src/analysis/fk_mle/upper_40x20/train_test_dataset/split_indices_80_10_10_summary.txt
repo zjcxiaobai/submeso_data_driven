@@ -1,0 +1,15 @@
+source_y: /scratch/jczhang/submeso_data_driven/_src/analysis/shuffle_upper40x20_mld_rho/data/y.npy
+source_time_index: /scratch/jczhang/submeso_data_driven/_src/analysis/shuffle_upper40x20_mld_rho/data/time_index.npy
+checked_predictions: /scratch/jczhang/submeso_data_driven/_src/analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_predictions_denorm.npz
+n_total_samples: 11478
+n_valid_centers: 11470
+n_train: 9176
+n_val: 1147
+n_test: 1147
+train_sample_min: 8
+train_sample_max: 11477
+val_sample_min: 10
+val_sample_max: 11475
+test_sample_min: 13
+test_sample_max: 11455
+test_order_matches_saved_predictions: True

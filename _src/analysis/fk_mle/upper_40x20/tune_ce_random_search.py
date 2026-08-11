@@ -139,13 +139,19 @@ def submesofluxnet_train_indices(config: dict, project_dir: Path) -> np.ndarray:
     return centers[train_pos]
 
 
+def load_time_index(path: Path) -> np.ndarray:
+    z = np.load(path)
+    if isinstance(z, np.lib.npyio.NpzFile):
+        time_key = "time_index" if "time_index" in z.files else "time"
+        return z[time_key].astype(np.int64)
+    return np.asarray(z, dtype=np.int64)
+
+
 def load_truth(path: Path, time_source: Path) -> tuple[np.ndarray, np.ndarray]:
     if path.suffix == ".npy":
         data = np.load(path, mmap_mode="r")
         data = np.asarray(data[:, 0] if data.ndim == 4 and data.shape[1] == 1 else data, dtype=np.float32)
-        z_time = np.load(time_source)
-        time_key = "time_index" if "time_index" in z_time.files else "time"
-        return z_time[time_key].astype(np.int64), data
+        return load_time_index(time_source), data
     z = np.load(path)
     time_key = "time_index" if "time_index" in z.files else "time"
     return z[time_key].astype(np.int64), z["data"].astype(np.float32)
