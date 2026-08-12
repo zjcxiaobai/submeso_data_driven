@@ -28,7 +28,7 @@ import xarray as xr
 PROJECT_DIR = Path(__file__).resolve().parents[3]
 REPO_ROOT = PROJECT_DIR.parent
 PER_SNAPSHOT_DIR = PROJECT_DIR / "analysis/per_snapshot_r2_time_series"
-OUT_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20/mld_rho_split_80_10_10"
+OUT_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20/Ce_base_case_calculation"
 
 if str(PER_SNAPSHOT_DIR) not in sys.path:
     sys.path.insert(0, str(PER_SNAPSHOT_DIR))
@@ -61,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--grid-run-dir",
         type=Path,
-        default=Path("/scratch/jczhang/MITgcm_baroclinic_instability_old/MITgcm/verification/tutorial_reentrant_channel/run"),
+        default=Path("/scratch/jczhang/MITgcm_BI/verification/tutorial_reentrant_channel/run"),
     )
     parser.add_argument("--box-j", type=int, default=10)
     parser.add_argument("--box-i", type=int, default=10)

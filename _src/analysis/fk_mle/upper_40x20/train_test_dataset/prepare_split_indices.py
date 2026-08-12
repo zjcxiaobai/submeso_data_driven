@@ -16,8 +16,8 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 ANALYSIS_DIR = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/data"
 PREDICTIONS = PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_predictions_denorm.npz"
-OUT_NPZ = ANALYSIS_DIR / "split_indices_80_10_10.npz"
-OUT_SUMMARY = ANALYSIS_DIR / "split_indices_80_10_10_summary.txt"
+OUT_NPZ = ANALYSIS_DIR / "split_indices.npz"
+OUT_SUMMARY = ANALYSIS_DIR / "split_indices_summary.txt"
 
 SEED = 42
 TEMPORAL_OFFSETS = [-8, -7, -6, -5, -4, -3, -2, -1, 0]

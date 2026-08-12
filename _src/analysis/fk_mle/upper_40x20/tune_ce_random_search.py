@@ -26,6 +26,7 @@ import yaml
 PROJECT_DIR = Path(__file__).resolve().parents[3]
 REPO_ROOT = PROJECT_DIR.parent
 ANALYSIS_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20"
+CASE_DIR = ANALYSIS_DIR / "Ce_base_case_calculation"
 PER_SNAPSHOT_DIR = PROJECT_DIR / "analysis/per_snapshot_r2_time_series"
 FK_TUNING_DIR = REPO_ROOT / "src/post_analysis/00_FK_Ce_LfMin_Tuning"
 
@@ -40,14 +41,14 @@ from src.utils import build_coarse_grid, make_grid, read_mitgcm  # noqa: E402
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=PROJECT_DIR / "configs/unet_encoder_convlstm_no_shuffle_upper_40x20.yaml")
+    parser.add_argument("--config", type=Path, default=ANALYSIS_DIR / "config_mld_rho_split.yaml")
     parser.add_argument("--fk-inputs", type=Path, default=FK_TUNING_DIR / "fk_input_trimmed.npz")
-    parser.add_argument("--truth", type=Path, default=PROJECT_DIR / "data/train_on_small_domain/upper_40x20/y.npy")
-    parser.add_argument("--time-source", type=Path, default=REPO_ROOT / "data/mld/wT.npz")
+    parser.add_argument("--truth", type=Path, default=PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/data/y.npy")
+    parser.add_argument("--time-source", type=Path, default=PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/data/time_index.npy")
     parser.add_argument(
         "--grid-run-dir",
         type=Path,
-        default=Path("/scratch/jczhang/MITgcm_baroclinic_instability_old/MITgcm/verification/tutorial_reentrant_channel/run"),
+        default=Path("/scratch/jczhang/MITgcm_BI/verification/tutorial_reentrant_channel/run"),
     )
     parser.add_argument("--box-j", type=int, default=10)
     parser.add_argument("--box-i", type=int, default=10)
@@ -84,12 +85,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--basis-output",
         type=Path,
-        default=ANALYSIS_DIR / "fk_train_ce1_basis.npz",
+        default=CASE_DIR / "fk_train_ce1_basis.npz",
         help="Reusable C_e=1 FK basis. Existing snapshots are reused.",
     )
-    parser.add_argument("--history-csv", type=Path, default=ANALYSIS_DIR / "ce_random_search_history.csv")
-    parser.add_argument("--summary-output", type=Path, default=ANALYSIS_DIR / "ce_random_search_summary.txt")
-    parser.add_argument("--plot-output", type=Path, default=ANALYSIS_DIR / "ce_random_search_r2.png")
+    parser.add_argument("--history-csv", type=Path, default=CASE_DIR / "ce_random_search_history.csv")
+    parser.add_argument("--summary-output", type=Path, default=CASE_DIR / "ce_random_search_summary.txt")
+    parser.add_argument("--plot-output", type=Path, default=CASE_DIR / "ce_random_search_r2.png")
     return parser.parse_args()
 
 
@@ -180,8 +181,20 @@ def align_train_samples(
 
 
 def build_grid(grid_run_dir: Path, box_j: int, box_i: int) -> tuple[xr.Dataset, object]:
-    ds_fine = read_mitgcm.read_mitgrid_staggered(grid_run_dir)
-    ds_coarse = build_coarse_grid.build_coarse_grid_staggered(ds_fine, box_j=box_j, box_i=box_i)
+    cache_path = CASE_DIR / f"coarse_grid_boxj{box_j}_boxi{box_i}.nc"
+    if cache_path.exists():
+        print(f"Loading cached coarse grid: {cache_path}", flush=True)
+        ds_coarse = xr.load_dataset(cache_path, decode_times=False)
+    else:
+        print(f"Reading MITgcm grid from {grid_run_dir}", flush=True)
+        ds_fine = read_mitgcm.read_mitgrid_staggered(grid_run_dir)
+        print(f"Building coarse grid with box_j={box_j}, box_i={box_i}", flush=True)
+        ds_coarse = build_coarse_grid.build_coarse_grid_staggered(ds_fine, box_j=box_j, box_i=box_i)
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+        ds_coarse.to_netcdf(tmp_path)
+        tmp_path.replace(cache_path)
+        print(f"Saved cached coarse grid: {cache_path}", flush=True)
     grid = make_grid.make_grid_periodic_x(ds_coarse)
     return ds_coarse, grid
 
@@ -291,9 +304,13 @@ def build_ce1_basis(args: argparse.Namespace, sample_index: np.ndarray, time_ind
     print(f"Missing C_e=1 basis snapshots total: {len(missing_all)}", flush=True)
     print(f"Will compute in this run: {len(missing)}", flush=True)
     if missing:
+        print("Preparing FK grid...", flush=True)
         ds_coarse, _ = build_grid(args.grid_run_dir, args.box_j, args.box_i)
+        print("Loading FK input cache...", flush=True)
         fk_inputs = np.load(args.fk_inputs)
+        print("Building FK input DataArrays...", flush=True)
         kpphbl_da, t_da, s_da, eta_da, _ = make_dataarrays(fk_inputs, ds_coarse)
+        print("FK setup complete; starting missing basis snapshots.", flush=True)
         j0, j1, i0, i1 = args.crop
 
         for n, (sample, time) in enumerate(missing, start=1):

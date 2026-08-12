@@ -1,0 +1,19 @@
+FK LfMin random search with fixed tuned C_e
+C_e: 2.25895966
+LfMin range: 100-5000
+sampling: log
+n_trials_requested: 40
+n_completed_trials: 16
+n_aligned_train_snapshots: 6601
+sample_index_range: 8-8260
+time_index_range: 6815088-21147120
+
+Best by mean per-snapshot R2
+LfMin: 119
+C_e: 2.25895966
+n_snapshots: 6601
+mean_per_snapshot_r2: 0.203801983
+median_per_snapshot_r2: 0.2041310816
+overall_r2: 0.2145839932
+mae: 4.767040132
+rmse: 12.59317002
