@@ -13,7 +13,7 @@ import numpy as np
 
 
 HERE = Path(__file__).resolve().parent
-DECODER_DIR = HERE / "decoder_channel_ablation_encoder_convlstm"
+DECODER_DIR = HERE
 DEFAULT_LAYER_ROOT = DECODER_DIR / "layerwise_feature_map_ablation_sample_9523"
 DEFAULT_PHYSICS_DIR = DECODER_DIR / "physics_variables_sample_9523"
 DEFAULT_OUTPUT_DIR = DEFAULT_LAYER_ROOT / "physics_variable_spatial_correlations"

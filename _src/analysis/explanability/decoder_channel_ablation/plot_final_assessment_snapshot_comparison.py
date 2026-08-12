@@ -8,11 +8,12 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
-DECODER_DIR = PROJECT_DIR / "analysis/explanability/decoder_channel_ablation_encoder_convlstm"
-DEFAULT_PCA = DECODER_DIR / "last_decoder_pca/last_decoder_pca_results.npz"
+PROJECT_DIR = Path(__file__).resolve().parents[3]
+DECODER_DIR = PROJECT_DIR / "analysis/explanability/decoder_channel_ablation"
+DEFAULT_FEATURES = DECODER_DIR / "layerwise_feature_map_ablation_sample_9523/decoder_up1_20x40/top_feature_maps_and_ablation.npz"
 DEFAULT_PHYSICS = DECODER_DIR / "physics_variables_sample_9523/physics_variables.npz"
-DEFAULT_OUTPUT = DECODER_DIR / "final_assessment/pc1_physics_snapshot_comparison.png"
+DEFAULT_CORRELATIONS = DECODER_DIR / "layerwise_feature_map_ablation_sample_9523/physics_variable_spatial_correlations/all_layer_physics_spatial_correlations.npz"
+DEFAULT_OUTPUT = DECODER_DIR / "final_assessment/prediction_rank1_physics_snapshot_comparison.png"
 
 FIELD_SPECS = [
     ("dTdx", r"$\partial T/\partial x$", "RdBu_r", True),
@@ -27,16 +28,11 @@ FIELD_SPECS = [
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Plot PC1 decoder mode and physics fields ordered by PC1 correlation.")
-    parser.add_argument("--pca", type=Path, default=DEFAULT_PCA)
+    parser = argparse.ArgumentParser(description="Plot rank-1 decoder map and physics fields ordered by correlation.")
+    parser.add_argument("--feature-maps", type=Path, default=DEFAULT_FEATURES)
     parser.add_argument("--physics", type=Path, default=DEFAULT_PHYSICS)
+    parser.add_argument("--correlations", type=Path, default=DEFAULT_CORRELATIONS)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument(
-        "--flip-pc1",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Plot -PC1 and use correlations with -PC1. This only fixes the arbitrary PCA sign.",
-    )
     return parser.parse_args()
 
 
@@ -63,25 +59,22 @@ def limits(image, signed):
 
 def main():
     args = parse_args()
-    with np.load(args.pca, allow_pickle=True) as data:
-        pc1 = np.asarray(data["pc_maps"][0, 0], dtype=float)
-        explained = float(data["explained_variance_ratio"][0])
-        variables = [str(value) for value in data["physics_variables"]]
-        correlations = np.asarray(data["physics_correlations"], dtype=float)[:, 0]
-    if args.flip_pc1:
-        pc1 = -pc1
-        correlations = -correlations
-        pc_label = r"$-PC1$"
-    else:
-        pc_label = "PC1"
-
+    with np.load(args.feature_maps, allow_pickle=True) as data:
+        channel = int(data["top_channels"][0])
+        feature_map = np.asarray(data["feature_maps"][0], dtype=float)
     with np.load(args.physics, allow_pickle=True) as data:
         fields = {name: np.asarray(data[name], dtype=float) for name, *_ in FIELD_SPECS}
-
-    corr_by_name = {name: float(correlations[variables.index(name)]) for name, *_ in FIELD_SPECS}
-    ordered = sorted(FIELD_SPECS, key=lambda item: corr_by_name[item[0]], reverse=True)
+    with np.load(args.correlations, allow_pickle=True) as data:
+        variables = [str(value) for value in data["physics_variables"]]
+        layers = [str(value) for value in data["layers"]]
+        layer_index = layers.index("decoder_up1_20x40")
+        correlations = {
+            name: float(data["correlations"][variables.index(name), layer_index, 0])
+            for name, *_ in FIELD_SPECS
+        }
+    ordered = sorted(FIELD_SPECS, key=lambda item: correlations[item[0]], reverse=True)
     physics_panels = [
-        (f"{label}\n$r={corr_by_name[name]:.2f}$", fields[name], cmap, signed)
+        (f"{label}\n$r={correlations[name]:.2f}$", fields[name], cmap, signed)
         for name, label, cmap, signed in ordered
     ]
 
@@ -89,21 +82,16 @@ def main():
     fig = plt.figure(figsize=(9.2, 2.20), constrained_layout=True)
     grid = fig.add_gridspec(2, 6, width_ratios=(1.25, 0.035, 1, 1, 1, 1))
 
-    ax_pc = fig.add_subplot(grid[:, 0])
-    vmin, vmax = limits(pc1, True)
-    mesh = ax_pc.imshow(
-        pc1,
-        origin="lower",
-        aspect="equal",
-        cmap="RdBu_r",
-        vmin=vmin,
-        vmax=vmax,
-        interpolation="nearest",
+    ax_rank = fig.add_subplot(grid[:, 0])
+    vmin, vmax = limits(feature_map, True)
+    mesh = ax_rank.imshow(
+        feature_map, origin="lower", aspect="equal", cmap="RdBu_r",
+        vmin=vmin, vmax=vmax, interpolation="nearest",
     )
-    ax_pc.set_title(f"{pc_label} ({100.0 * explained:.1f}%)", fontsize=8, pad=3)
-    ax_pc.set_xticks([])
-    ax_pc.set_yticks([])
-    fig.colorbar(mesh, ax=ax_pc, fraction=0.046, pad=0.02)
+    ax_rank.set_title(f"Rank 1: ch {channel}", fontsize=8, pad=3)
+    ax_rank.set_xticks([])
+    ax_rank.set_yticks([])
+    fig.colorbar(mesh, ax=ax_rank, fraction=0.046, pad=0.02)
 
     ax_separator = fig.add_subplot(grid[:, 1])
     ax_separator.axvline(0.5, color="black", linewidth=1.0)
@@ -117,19 +105,13 @@ def main():
     for ax, (title, image, cmap, signed) in zip(physics_axes, physics_panels):
         vmin, vmax = limits(image, signed)
         mesh = ax.imshow(
-            image,
-            origin="lower",
-            aspect="equal",
-            cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-            interpolation="nearest",
+            image, origin="lower", aspect="equal", cmap=cmap,
+            vmin=vmin, vmax=vmax, interpolation="nearest",
         )
         ax.set_title(title, fontsize=8, pad=3)
         ax.set_xticks([])
         ax.set_yticks([])
         fig.colorbar(mesh, ax=ax, fraction=0.046, pad=0.02)
-
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.output, dpi=600, bbox_inches="tight")
     plt.close(fig)

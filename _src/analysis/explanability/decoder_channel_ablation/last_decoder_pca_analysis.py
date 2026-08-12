@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
+PROJECT_DIR = Path(__file__).resolve().parents[3]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
@@ -22,7 +22,7 @@ from utils import get_device, load_config, seed_everything  # noqa: E402
 
 
 DEFAULT_CONFIG = PROJECT_DIR / "configs/unet_encoder_convlstm_no_shuffle_upper_40x20.yaml"
-DECODER_DIR = PROJECT_DIR / "analysis/explanability/decoder_channel_ablation_encoder_convlstm"
+DECODER_DIR = PROJECT_DIR / "analysis/explanability/decoder_channel_ablation"
 DEFAULT_PHYSICS = DECODER_DIR / "physics_variables_sample_9523/physics_variables.npz"
 DEFAULT_OUTPUT_DIR = DECODER_DIR / "last_decoder_pca"
 DEFAULT_FEATURE_CACHE = DEFAULT_OUTPUT_DIR / "last_decoder_all_channel_feature_maps.npz"

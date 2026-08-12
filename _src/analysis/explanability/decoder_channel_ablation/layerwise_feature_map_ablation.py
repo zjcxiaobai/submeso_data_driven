@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
+PROJECT_DIR = Path(__file__).resolve().parents[3]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
@@ -26,7 +26,7 @@ from utils import get_device, load_config, seed_everything  # noqa: E402
 DEFAULT_CONFIG = PROJECT_DIR / "configs/unet_encoder_convlstm_no_shuffle_upper_40x20.yaml"
 DEFAULT_OUTPUT_ROOT = (
     PROJECT_DIR
-    / "analysis/explanability/decoder_channel_ablation_encoder_convlstm"
+    / "analysis/explanability/decoder_channel_ablation"
     / "layerwise_feature_map_ablation_sample_9523"
 )
 

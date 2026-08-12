@@ -8,8 +8,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
-DECODER_DIR = PROJECT_DIR / "analysis/explanability/decoder_channel_ablation_encoder_convlstm"
+PROJECT_DIR = Path(__file__).resolve().parents[3]
+DECODER_DIR = PROJECT_DIR / "analysis/explanability/decoder_channel_ablation"
 DEFAULT_PCA = DECODER_DIR / "last_decoder_pca/last_decoder_pca_results.npz"
 DEFAULT_PHYSICS = DECODER_DIR / "physics_variables_sample_9523/physics_variables.npz"
 DEFAULT_CORRELATIONS = DECODER_DIR / "layerwise_feature_map_ablation_sample_9523/physics_variable_spatial_correlations/all_layer_physics_spatial_correlations.npz"

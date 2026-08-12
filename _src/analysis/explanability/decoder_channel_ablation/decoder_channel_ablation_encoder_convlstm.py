@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
+PROJECT_DIR = Path(__file__).resolve().parents[3]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
@@ -25,7 +25,7 @@ plt.rcParams["svg.fonttype"] = "none"
 
 
 DEFAULT_CONFIG = PROJECT_DIR / "configs/unet_encoder_convlstm_no_shuffle_upper_40x20.yaml"
-DEFAULT_OUTPUT_DIR = PROJECT_DIR / "analysis/explanability/decoder_channel_ablation_encoder_convlstm"
+DEFAULT_OUTPUT_DIR = PROJECT_DIR / "analysis/explanability/decoder_channel_ablation"
 FEATURE_INDEX = {
     "U": 0,
     "V": 1,

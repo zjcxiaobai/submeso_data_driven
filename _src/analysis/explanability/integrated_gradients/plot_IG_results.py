@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_DIR = HERE / "gridcell_integrated_gradients_high_flux"
+DEFAULT_DIR = HERE
 
 
 def parse_args() -> argparse.Namespace:

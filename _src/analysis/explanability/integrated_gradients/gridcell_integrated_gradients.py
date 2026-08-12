@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
+PROJECT_DIR = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
@@ -35,10 +35,9 @@ from utils import get_device, load_config, seed_everything  # noqa: E402
 DEFAULT_CONFIG = PROJECT_DIR / "configs/unet_encoder_convlstm_shuffle_all_upper_40x20.yaml"
 DEFAULT_SELECTION = (
     HERE
-    / "integrated_gradients_encoder_convlstm"
     / "all_test_mean_ig_mean_abs_zero_steps64.npz"
 )
-DEFAULT_OUTPUT_DIR = HERE / "gridcell_integrated_gradients_high_flux"
+DEFAULT_OUTPUT_DIR = HERE
 
 
 def parse_args() -> argparse.Namespace:

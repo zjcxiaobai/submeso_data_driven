@@ -11,21 +11,13 @@ import numpy as np
 
 
 HERE = Path(__file__).resolve().parent
-ROOT = (
-    HERE
-    / "decoder_channel_ablation_encoder_convlstm"
-    / "layerwise_feature_map_ablation_sample_9523"
-)
+ROOT = HERE / "layerwise_feature_map_ablation_sample_9523"
 DEFAULT_INPUT = (
     ROOT
     / "physics_variable_spatial_correlations"
     / "all_layer_physics_spatial_correlations.npz"
 )
-DEFAULT_OUTPUT_DIR = (
-    HERE
-    / "decoder_channel_ablation_encoder_convlstm"
-    / "final_assessment"
-)
+DEFAULT_OUTPUT_DIR = HERE / "final_assessment"
 
 VARIABLES = [
     ("divergence", "Divergence"),
