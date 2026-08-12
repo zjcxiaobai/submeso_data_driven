@@ -28,12 +28,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input",
         type=Path,
-        default=HERE / "encoder_convlstm_upper_40x20_feature_importance.npz",
+        default=HERE / "model_analysis_feature_importance.npz",
     )
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=HERE / "encoder_convlstm_upper_40x20_feature_importance_combined",
+        default=HERE / "model_analysis_feature_importance_combined",
     )
     return parser.parse_args()
 
@@ -105,7 +105,7 @@ def draw_figure(
         ax.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.35, alpha=0.55)
         ax.tick_params(labelsize=6, colors=PALETTE["neutral_dark"])
         ax.set_title(
-            f"{rank}. {feature_names[feature_index]}: mean R2 drop={feature_drop[feature_index]:.3f}",
+            f"{rank}. {feature_names[feature_index]}: mean $R^2$ drop={feature_drop[feature_index]:.3f}",
             fontsize=7,
             pad=3,
         )
@@ -130,8 +130,6 @@ def draw_figure(
 
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_prefix.with_suffix(".png"), dpi=600, bbox_inches="tight")
-    fig.savefig(output_prefix.with_suffix(".pdf"), bbox_inches="tight")
-    fig.savefig(output_prefix.with_suffix(".svg"), bbox_inches="tight")
     plt.close(fig)
 
 
@@ -140,8 +138,6 @@ def main() -> None:
     sample_index, baseline_r2, feature_r2, feature_drop, feature_names = load_result(args.input)
     draw_figure(sample_index, baseline_r2, feature_r2, feature_drop, feature_names, args.output_prefix)
     print(f"Saved {args.output_prefix.with_suffix('.png')}", flush=True)
-    print(f"Saved {args.output_prefix.with_suffix('.pdf')}", flush=True)
-    print(f"Saved {args.output_prefix.with_suffix('.svg')}", flush=True)
 
 
 if __name__ == "__main__":

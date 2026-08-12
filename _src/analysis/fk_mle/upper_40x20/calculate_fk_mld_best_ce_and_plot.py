@@ -56,8 +56,8 @@ PALETTE = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--c-e", type=float, default=BEST_CE)
-    parser.add_argument("--predictions", type=Path, default=PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_predictions_denorm.npz")
-    parser.add_argument("--time-source", type=Path, default=PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/data/time_index.npy")
+    parser.add_argument("--predictions", type=Path, default=PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz")
+    parser.add_argument("--time-source", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/time_index.npy")
     parser.add_argument(
         "--grid-run-dir",
         type=Path,

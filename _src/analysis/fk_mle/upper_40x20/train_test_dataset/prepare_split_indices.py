@@ -14,8 +14,8 @@ import numpy as np
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 ANALYSIS_DIR = Path(__file__).resolve().parent
-DATA_DIR = PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/data"
-PREDICTIONS = PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_predictions_denorm.npz"
+DATA_DIR = PROJECT_DIR / "analysis/model_analysis/data"
+PREDICTIONS = PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz"
 OUT_NPZ = ANALYSIS_DIR / "split_indices.npz"
 OUT_SUMMARY = ANALYSIS_DIR / "split_indices_summary.txt"
 
@@ -66,7 +66,7 @@ def main() -> None:
 
     if not np.array_equal(test_sample, saved_test_sample):
         raise RuntimeError(
-            "Reproduced test sample indices do not match outputs_split_80_10_10/test_predictions_denorm.npz. "
+            "Reproduced test sample indices do not match model_analysis/outputs/test_predictions_denorm.npz. "
             f"First reproduced={test_sample[:5].tolist()}, saved={saved_test_sample[:5].tolist()}"
         )
 

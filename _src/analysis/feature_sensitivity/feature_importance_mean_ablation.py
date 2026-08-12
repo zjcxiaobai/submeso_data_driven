@@ -33,13 +33,7 @@ PALETTE = {
 }
 
 CASES = {
-    "no_shuffle": PROJECT_DIR / "configs/unet_no_shuffle.yaml",
-    "shuffle_train_val": PROJECT_DIR / "configs/unet_shuffle_train_val.yaml",
-    "shuffle_all": PROJECT_DIR / "configs/unet_shuffle_all.yaml",
-    "encoder_convlstm_upper_40x20": PROJECT_DIR / "configs/unet_encoder_convlstm_no_shuffle_upper_40x20.yaml",
-    "encoder_convlstm_shuffle_all_upper_40x20": (
-        PROJECT_DIR / "configs/unet_encoder_convlstm_shuffle_all_upper_40x20.yaml"
-    ),
+    "model_analysis": PROJECT_DIR / "analysis/feature_sensitivity/config_model_analysis.yaml",
 }
 
 DEFAULT_FEATURE_NAMES = [
@@ -49,7 +43,7 @@ DEFAULT_FEATURE_NAMES = [
     "Vorticity",
     "Strain",
     "Potential temperature",
-    "Horizontal speed",
+    "Density",
     "KPP boundary layer depth",
 ]
 
@@ -75,13 +69,13 @@ def parse_args() -> argparse.Namespace:
         "--cases",
         nargs="+",
         choices=sorted(CASES),
-        default=["no_shuffle", "shuffle_train_val", "shuffle_all"],
+        default=["model_analysis"],
         help="Model cases to analyze.",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=PROJECT_DIR / "analysis/feature_importance",
+        default=PROJECT_DIR / "analysis/feature_sensitivity",
         help="Directory for feature-importance outputs.",
     )
     parser.add_argument(
@@ -352,8 +346,6 @@ def plot_sorted_importance(results: list[CaseResult], output_dir: Path) -> None:
 
 def save_figure(fig, output_prefix: Path) -> None:
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_prefix.with_suffix(".svg"), bbox_inches="tight")
-    fig.savefig(output_prefix.with_suffix(".pdf"), bbox_inches="tight")
     fig.savefig(output_prefix.with_suffix(".png"), dpi=600, bbox_inches="tight")
     plt.close(fig)
 
