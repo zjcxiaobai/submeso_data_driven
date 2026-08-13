@@ -3,7 +3,7 @@ C_e: 2.25895966
 LfMin range: 100-5000
 sampling: log
 n_trials_requested: 40
-n_completed_trials: 31
+n_completed_trials: 32
 n_aligned_train_snapshots: 6601
 sample_index_range: 8-8260
 time_index_range: 6815088-21147120

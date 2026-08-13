@@ -55,7 +55,7 @@ def parse_args() -> argparse.Namespace:
         default=ANALYSIS_DIR / "fk_vs_submesofluxnet_per_snapshot_r2_stats.csv",
     )
     parser.add_argument("--rolling-window", type=int, default=81)
-    parser.add_argument("--fk-display-label", default="FK", help="Display label for the FK/MLE baseline in plots and summaries.")
+    parser.add_argument("--fk-display-label", default="MLE parameterization", help="Display label for the FK/MLE baseline in plots and summaries.")
     return parser.parse_args()
 
 
@@ -237,8 +237,8 @@ def draw_figure(
     ymax = min(1.0, max(float(np.nanmax(fluxnet_r2)), float(np.nanmax(fk_r2))) + 0.04)
     ax_ts.set_ylim(ymin, ymax)
     ax_ts.set_xlabel("Held-out test sample number")
-    ax_ts.set_ylabel(r"Per-snapshot $R^2$")
-    ax_ts.set_title(fr"{fk_label} versus SubmesoFluxNet test $R^2$", fontsize=7.5, pad=4)
+    ax_ts.set_ylabel(r"Snapshot $R^2$")
+    ax_ts.set_title(fr"MLE parameterization and SubmesoFluxNet test $R^2$", fontsize=7.5, pad=4)
     ax_ts.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.4, alpha=0.5)
     ax_ts.legend(loc="lower left", fontsize=6.4, handlelength=1.5)
 

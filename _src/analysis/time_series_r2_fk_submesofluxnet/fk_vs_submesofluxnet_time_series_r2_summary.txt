@@ -1,0 +1,31 @@
+MLE parameterization versus SubmesoFluxNet per-snapshot R2 comparison
+comparison_scope: sample_index intersection of MLE parameterization and SubmesoFluxNet R2 files
+note: SubmesoFluxNet is restricted to the same MLE parameterization-available subset before statistics are computed
+sample_index_range: 13-11455
+n_common_snapshots: 1147
+
+SubmesoFluxNet
+count: 1147
+finite_count: 1147
+mean: 0.8543666168
+median: 0.8628026992
+std: 0.06594769094
+min: 0.5686080754
+max: 0.9725904129
+p05: 0.7258209109
+p25: 0.8182773441
+p75: 0.9035406411
+p95: 0.9427351754
+
+MLE parameterization
+count: 1147
+finite_count: 1147
+mean: 0.190998463
+median: 0.1923291262
+std: 0.1079089382
+min: -0.6205230384
+max: 0.4996256345
+p05: 0.03177240762
+p25: 0.1279020582
+p75: 0.2582619826
+p95: 0.355235556
