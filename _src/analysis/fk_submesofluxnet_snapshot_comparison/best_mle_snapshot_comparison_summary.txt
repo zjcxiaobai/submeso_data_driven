@@ -1,0 +1,15 @@
+SubmesoFluxNet snapshot comparison against MLE parameterization
+selection: maximum MLE parameterization per-snapshot R2 on the current model_analysis test set
+normalized_squared_error: ((prediction - truth) / std(truth_selected_snapshot))^2
+temporal_correlation: pixelwise Pearson correlation over the aligned test time series
+sample_index: 7562
+test_position: 1007
+time_index: 19940976
+submesofluxnet_snapshot_r2: 0.9434996024
+fk_snapshot_r2: 0.4996256345
+submesofluxnet_snapshot_spatial_corr: 0.971384692
+fk_snapshot_spatial_corr: 0.7184447387
+submesofluxnet_nse_mean: 0.05650039622
+fk_nse_mean: 0.5003743655
+submesofluxnet_temporal_corr_mean: 0.7833982693
+fk_temporal_corr_mean: 0.2707056363

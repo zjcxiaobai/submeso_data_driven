@@ -5,45 +5,30 @@ import argparse
 import csv
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 
-plt.rcParams["font.family"] = "sans-serif"
-plt.rcParams["font.sans-serif"] = ["Arial", "DejaVu Sans", "Liberation Sans"]
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
-
-PALETTE = {
-    "line": "#1F5A85",
-    "mean": "#B64A3B",
-    "neutral_dark": "#4D4D4D",
-    "neutral_mid": "#767676",
-    "neutral_light": "#CFCECE",
-}
+HERE = Path(__file__).resolve().parent
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Calculate per-snapshot spatial correlation for SubmesoFluxNet predictions.")
+    parser = argparse.ArgumentParser(description="Calculate per-snapshot spatial correlation for SubmesoFluxNet test predictions.")
     parser.add_argument(
         "--predictions",
         type=Path,
-        default=PROJECT_DIR / "outputs_no_shuffle_overfitting_test/test_predictions_denorm.npz",
-        help="NPZ produced by evaluate.py with sample_index, prediction, and target arrays.",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz",
+        help="NPZ containing sample_index, prediction, and target arrays.",
     )
     parser.add_argument(
         "--csv-output",
         type=Path,
-        default=PROJECT_DIR / "analysis/spatial_corr/no_shuffle_overfitting_test_spatial_corr.csv",
+        default=HERE / "submesofluxnet_spatial_corr.csv",
     )
     parser.add_argument(
         "--summary-output",
         type=Path,
-        default=PROJECT_DIR / "analysis/spatial_corr/no_shuffle_overfitting_test_spatial_corr_summary.txt",
-    )
-    parser.add_argument(
-        "--plot-output-prefix",
-        type=Path,
-        default=PROJECT_DIR / "analysis/spatial_corr/no_shuffle_overfitting_test_spatial_corr",
+        default=HERE / "submesofluxnet_spatial_corr_summary.txt",
     )
     return parser.parse_args()
 
@@ -74,17 +59,15 @@ def load_predictions(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         sample_index = np.asarray(data["sample_index"], dtype=np.int64)
         prediction = np.asarray(data["prediction"], dtype=np.float64)
         target = np.asarray(data["target"], dtype=np.float64)
-    if prediction.shape != target.shape:
-        raise ValueError(f"prediction shape {prediction.shape} does not match target shape {target.shape}")
     if sample_index.shape[0] != prediction.shape[0]:
         raise ValueError("sample_index length does not match prediction sample count")
-    if prediction.ndim != 4 or prediction.shape[1] != 1:
-        raise ValueError(f"Expected prediction/target arrays shaped (N,1,H,W), got {prediction.shape}")
-    return sample_index, prediction[:, 0], target[:, 0]
+    return sample_index, prediction, target
 
 
 def finite_summary(values: np.ndarray) -> dict[str, float | int]:
     finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        raise ValueError("No finite spatial-correlation values were calculated.")
     return {
         "count": int(values.size),
         "finite_count": int(finite.size),
@@ -100,16 +83,15 @@ def finite_summary(values: np.ndarray) -> dict[str, float | int]:
 
 def write_csv(path: Path, sample_index: np.ndarray, rho: np.ndarray) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    order = np.argsort(sample_index)
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=["test_position", "sample_index", "spatial_corr"])
         writer.writeheader()
-        for test_position, idx in enumerate(order):
+        for test_position, (sample, corr) in enumerate(zip(sample_index, rho)):
             writer.writerow(
                 {
                     "test_position": test_position,
-                    "sample_index": int(sample_index[idx]),
-                    "spatial_corr": float(rho[idx]),
+                    "sample_index": int(sample),
+                    "spatial_corr": float(corr),
                 }
             )
 
@@ -127,47 +109,6 @@ def write_summary(path: Path, summary: dict[str, float | int], predictions_path:
                 handle.write(f"{key}: {value:.10g}\n")
 
 
-def apply_publication_style() -> None:
-    plt.rcParams.update(
-        {
-            "font.size": 7,
-            "axes.spines.right": False,
-            "axes.spines.top": False,
-            "axes.linewidth": 0.8,
-            "xtick.major.width": 0.8,
-            "ytick.major.width": 0.8,
-            "xtick.major.size": 3,
-            "ytick.major.size": 3,
-            "legend.frameon": False,
-        }
-    )
-
-
-def plot_series(path_prefix: Path, sample_index: np.ndarray, rho: np.ndarray, mean_rho: float) -> None:
-    apply_publication_style()
-    order = np.argsort(sample_index)
-    x = sample_index[order]
-    y = rho[order]
-
-    fig, ax = plt.subplots(figsize=(4.4, 2.2), constrained_layout=True)
-    ax.plot(x, y, color=PALETTE["line"], linewidth=1.05, label=fr"$\rho_n$")
-    ax.axhline(mean_rho, color=PALETTE["mean"], linewidth=1.0, label=fr"Mean $\rho$={mean_rho:.3f}")
-    ax.set_xlim(int(np.min(x)), int(np.max(x)))
-    ax.set_ylim(-1.0, 1.0)
-    ax.set_xlabel("Test sample index")
-    ax.set_ylabel(r"Spatial correlation $\rho_n$")
-    ax.set_title("SubmesoFluxNet held-out test data")
-    ax.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.45, alpha=0.55)
-    ax.tick_params(colors=PALETTE["neutral_dark"])
-    for spine in ax.spines.values():
-        spine.set_color(PALETTE["neutral_mid"])
-    ax.legend(loc="best", handlelength=2.2)
-
-    path_prefix.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path_prefix.with_suffix(".png"), dpi=600, bbox_inches="tight")
-    plt.close(fig)
-
-
 def main() -> None:
     args = parse_args()
     sample_index, prediction, target = load_predictions(args.predictions)
@@ -176,11 +117,9 @@ def main() -> None:
 
     write_csv(args.csv_output, sample_index, rho)
     write_summary(args.summary_output, summary, args.predictions)
-    plot_series(args.plot_output_prefix, sample_index, rho, float(summary["mean"]))
 
     print(f"Saved {args.csv_output}", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
-    print(f"Saved {args.plot_output_prefix.with_suffix('.png')}", flush=True)
     print(f"mean spatial correlation: {summary['mean']:.6f}", flush=True)
 
 

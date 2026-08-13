@@ -25,31 +25,33 @@ PALETTE = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Compare the best SubmesoFluxNet test snapshot against the corresponding FK prediction, "
+            "Compare a selected SubmesoFluxNet/FK test snapshot using the current model_analysis outputs, "
             "including joint histograms, normalized squared errors, and temporal correlation maps."
         )
     )
     parser.add_argument(
         "--fluxnet-predictions",
         type=Path,
-        default=PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz",
     )
     parser.add_argument(
         "--fk-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_test_Ce2p13062237_prediction_physical.npz",
+        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_prediction.npz",
     )
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=HERE / "best_fluxnet_snapshot_fk_comparison",
+        default=HERE / "best_mle_snapshot_comparison",
     )
-    parser.add_argument("--summary-output", type=Path, default=HERE / "best_fluxnet_snapshot_fk_comparison_summary.txt")
-    parser.add_argument("--data-output", type=Path, default=HERE / "best_fluxnet_snapshot_fk_comparison_data.npz")
-    parser.add_argument("--joint-output-prefix", type=Path, default=HERE / "best_fluxnet_snapshot_joint_histograms")
+    parser.add_argument("--summary-output", type=Path, default=HERE / "best_mle_snapshot_comparison_summary.txt")
+    parser.add_argument("--data-output", type=Path, default=HERE / "best_mle_snapshot_comparison_data.npz")
+    parser.add_argument("--joint-output-prefix", type=Path, default=HERE / "best_mle_snapshot_joint_histograms")
     parser.add_argument("--field-percentile", type=float, default=99.0)
     parser.add_argument("--error-percentile", type=float, default=99.0)
     parser.add_argument("--hist-bins", type=int, default=80)
+    parser.add_argument("--selection", choices=("best-fk", "best-fluxnet"), default="best-fk", help="Snapshot to plot: best FK/MLE R2 or best SubmesoFluxNet R2.")
+    parser.add_argument("--fk-display-label", default="MLE parameterization")
     return parser.parse_args()
 
 
@@ -297,7 +299,7 @@ def draw_main_figure(
     field_percentile: float,
     error_percentile: float,
     output_prefix: Path,
-    fk_label: str = "FK",
+    fk_label: str = "MLE parameterization",
 ) -> None:
     apply_style()
     field_limit = robust_symmetric_limit(
@@ -367,7 +369,7 @@ def draw_joint_hist_figure(
     fk_best: np.ndarray,
     hist_bins: int,
     output_prefix: Path,
-    fk_label: str = "FK",
+    fk_label: str = "MLE parameterization",
 ) -> None:
     apply_style()
     hist_limits = log_magnitude_limits(truth_best, fluxnet_best, fk_best)
@@ -401,6 +403,7 @@ def write_summary(
     sample_index: int,
     test_position: int,
     time_index: int | None,
+    selection: str,
     fluxnet_r2: float,
     fk_r2: float,
     fluxnet_spatial_corr: float,
@@ -412,8 +415,8 @@ def write_summary(
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
-        handle.write("Best SubmesoFluxNet snapshot comparison against FK\n")
-        handle.write("selection: maximum SubmesoFluxNet per-snapshot R2 on upper_40x20 held-out test set\n")
+        handle.write("SubmesoFluxNet snapshot comparison against MLE parameterization\n")
+        handle.write(f"selection: {selection}\n")
         handle.write("normalized_squared_error: ((prediction - truth) / std(truth_selected_snapshot))^2\n")
         handle.write("temporal_correlation: pixelwise Pearson correlation over the aligned test time series\n")
         handle.write(f"sample_index: {sample_index}\n")
@@ -436,7 +439,14 @@ def main() -> None:
     fk_sample, fk_prediction, fk_time_index = load_fk(args.fk_predictions)
     fk_aligned, fk_time_aligned = align_fk_to_fluxnet(flux_sample, fk_sample, fk_prediction, fk_time_index)
 
-    best_pos = int(np.nanargmax(flux_r2))
+    fk_r2_series = np.asarray([r2_score(fk_aligned[n], target[n]) for n in range(target.shape[0])], dtype=np.float64)
+    if args.selection == "best-fluxnet":
+        best_pos = int(np.nanargmax(flux_r2))
+        selection_text = "maximum SubmesoFluxNet per-snapshot R2 on the current model_analysis test set"
+    else:
+        best_pos = int(np.nanargmax(fk_r2_series))
+        selection_text = "maximum MLE parameterization per-snapshot R2 on the current model_analysis test set"
+
     sample_index = int(flux_sample[best_pos])
     time_index = int(fk_time_aligned[best_pos]) if fk_time_aligned is not None else None
     truth_best = target[best_pos]
@@ -447,7 +457,7 @@ def main() -> None:
     fk_error = normalized_squared_error(fk_best, truth_best)
     fluxnet_temporal_corr = temporal_corr_map(flux_prediction, target)
     fk_temporal_corr = temporal_corr_map(fk_aligned, target)
-    fk_r2 = r2_score(fk_best, truth_best)
+    fk_r2 = float(fk_r2_series[best_pos])
     fluxnet_spcorr = spatial_corr(fluxnet_best, truth_best)
     fk_spcorr = spatial_corr(fk_best, truth_best)
 
@@ -465,6 +475,7 @@ def main() -> None:
         field_percentile=args.field_percentile,
         error_percentile=args.error_percentile,
         output_prefix=args.output_prefix,
+        fk_label=args.fk_display_label,
     )
     draw_joint_hist_figure(
         truth_best=truth_best,
@@ -472,6 +483,7 @@ def main() -> None:
         fk_best=fk_best,
         hist_bins=args.hist_bins,
         output_prefix=args.joint_output_prefix,
+        fk_label=args.fk_display_label,
     )
 
     args.data_output.parent.mkdir(parents=True, exist_ok=True)
@@ -493,6 +505,7 @@ def main() -> None:
         sample_index=sample_index,
         test_position=best_pos,
         time_index=time_index,
+        selection=selection_text,
         fluxnet_r2=float(flux_r2[best_pos]),
         fk_r2=fk_r2,
         fluxnet_spatial_corr=fluxnet_spcorr,
@@ -507,8 +520,10 @@ def main() -> None:
     print(f"Saved {args.joint_output_prefix}.png", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
     print(f"Saved {args.data_output}", flush=True)
-    print(f"Best SubmesoFluxNet sample: {sample_index}, R2={float(flux_r2[best_pos]):.6f}", flush=True)
-    print(f"Corresponding FK R2: {fk_r2:.6f}", flush=True)
+    print(f"Selected sample: {sample_index}", flush=True)
+    print(f"Selection: {selection_text}", flush=True)
+    print(f"SubmesoFluxNet R2: {float(flux_r2[best_pos]):.6f}", flush=True)
+    print(f"{args.fk_display_label} R2: {fk_r2:.6f}", flush=True)
 
 
 if __name__ == "__main__":

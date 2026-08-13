@@ -1,5 +1,5 @@
 SubmesoFluxNet spatial correlation summary
-predictions: /scratch/jczhang/submeso_data_driven/_src/analysis/shuffle_upper40x20_mld_rho/outputs_split_80_10_10/test_predictions_denorm.npz
+predictions: /scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/outputs/test_predictions_denorm.npz
 count: 1147
 finite_count: 1147
 mean: 0.9255897826

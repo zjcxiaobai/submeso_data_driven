@@ -13,37 +13,37 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 
 PALETTE = {
-    "fluxnet": "#1F5A85",
-    "fk": "#B64A3B",
-    "neutral_dark": "#343434",
-    "neutral_mid": "#777777",
-    "neutral_light": "#D6D6D6",
+    "fluxnet": "#245E8A",
+    "fk": "#B55345",
+    "neutral_dark": "#2F2F2F",
+    "neutral_mid": "#7A7A7A",
+    "neutral_light": "#E3E3E3",
 }
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Plot SubmesoFluxNet and FK spatial correlations together.")
+    parser = argparse.ArgumentParser(description="Plot SubmesoFluxNet and MLE parameterization spatial correlations together.")
     parser.add_argument(
         "--fluxnet-csv",
         type=Path,
-        default=HERE / "no_shuffle_overfitting_test_spatial_corr.csv",
+        default=HERE / "submesofluxnet_spatial_corr.csv",
     )
     parser.add_argument(
         "--fk-csv",
         type=Path,
-        default=HERE / "fk_Ce2p13062237_spatial_corr.csv",
+        default=HERE / "fk_spatial_corr.csv",
     )
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=HERE / "fluxnet_fk_spatial_corr",
+        default=HERE / "submesofluxnet_mle_spatial_corr",
     )
     parser.add_argument(
         "--summary-output",
         type=Path,
-        default=HERE / "fluxnet_fk_spatial_corr_summary.txt",
+        default=HERE / "submesofluxnet_mle_spatial_corr_summary.txt",
     )
-    parser.add_argument("--fk-display-label", default="FK", help="Display label for the FK/MLE baseline in plots and summaries.")
+    parser.add_argument("--fk-display-label", default="MLE parameterization", help="Display label for the FK/MLE baseline in plots and summaries.")
     return parser.parse_args()
 
 
@@ -57,7 +57,7 @@ def apply_style() -> None:
             "font.size": 7,
             "axes.spines.right": False,
             "axes.spines.top": False,
-            "axes.linewidth": 0.75,
+            "axes.linewidth": 0.8,
             "axes.labelcolor": PALETTE["neutral_dark"],
             "xtick.color": PALETTE["neutral_dark"],
             "ytick.color": PALETTE["neutral_dark"],
@@ -102,7 +102,7 @@ def align_series(
     fk_lookup = {int(s): i for i, s in enumerate(fk_sample)}
     common = np.asarray(sorted(set(flux_lookup).intersection(fk_lookup)), dtype=np.int64)
     if common.size == 0:
-        raise ValueError("No common sample_index values between SubmesoFluxNet and FK spatial-correlation CSVs.")
+        raise ValueError("No common sample_index values between SubmesoFluxNet and MLE spatial-correlation CSVs.")
     flux = np.asarray([flux_corr[flux_lookup[int(s)]] for s in common], dtype=np.float64)
     fk = np.asarray([fk_corr[fk_lookup[int(s)]] for s in common], dtype=np.float64)
     return common, flux, fk
@@ -151,6 +151,23 @@ def save_figure(fig: plt.Figure, output_prefix: Path) -> None:
     fig.savefig(Path(f"{output_prefix}.png"), dpi=600, bbox_inches="tight")
 
 
+def rolling_median(values: np.ndarray, window: int = 31) -> np.ndarray:
+    if values.size < 3:
+        return values.copy()
+    window = min(window, values.size if values.size % 2 == 1 else values.size - 1)
+    if window < 3:
+        return values.copy()
+    if window % 2 == 0:
+        window += 1
+    half = window // 2
+    smooth = np.empty_like(values, dtype=np.float64)
+    for idx in range(values.size):
+        lo = max(0, idx - half)
+        hi = min(values.size, idx + half + 1)
+        smooth[idx] = np.nanmedian(values[lo:hi])
+    return smooth
+
+
 def draw_figure(
     sample: np.ndarray,
     flux_corr: np.ndarray,
@@ -161,43 +178,60 @@ def draw_figure(
     fk_label: str,
 ) -> None:
     apply_style()
-    fig, ax = plt.subplots(figsize=(4.85, 2.55), constrained_layout=True)
-    sample_number = np.arange(sample.size, dtype=np.int64)
+    fig, ax = plt.subplots(figsize=(4.9, 2.35), constrained_layout=True)
+    x = np.arange(sample.size, dtype=np.int64)
 
+    flux_smooth = rolling_median(flux_corr)
+    fk_smooth = rolling_median(fk_corr)
+
+    ax.plot(x, flux_corr, color=PALETTE["fluxnet"], linewidth=0.45, alpha=0.18, zorder=1)
+    ax.plot(x, fk_corr, color=PALETTE["fk"], linewidth=0.45, alpha=0.18, zorder=1)
     ax.plot(
-        sample_number,
-        flux_corr,
+        x,
+        flux_smooth,
         color=PALETTE["fluxnet"],
-        linewidth=0.95,
+        linewidth=1.35,
         label=fr"SubmesoFluxNet, mean $\rho$={float(flux_summary['mean']):.3f}",
+        zorder=3,
     )
     ax.plot(
-        sample_number,
-        fk_corr,
+        x,
+        fk_smooth,
         color=PALETTE["fk"],
-        linewidth=0.95,
+        linewidth=1.35,
         label=fr"{fk_label}, mean $\rho$={float(fk_summary['mean']):.3f}",
+        zorder=3,
     )
-    ax.set_xlim(0, int(sample_number.max()))
-    ax.set_ylim(0.0, 1.0)
+
+    ax.axhline(float(flux_summary["mean"]), color=PALETTE["fluxnet"], linewidth=0.75, linestyle=(0, (3, 2)), alpha=0.75, zorder=2)
+    ax.axhline(float(fk_summary["mean"]), color=PALETTE["fk"], linewidth=0.75, linestyle=(0, (3, 2)), alpha=0.75, zorder=2)
+
+    all_values = np.concatenate([flux_corr[np.isfinite(flux_corr)], fk_corr[np.isfinite(fk_corr)]])
+    ymin = max(-1.0, float(np.nanpercentile(all_values, 1)) - 0.04)
+    ymax = min(1.0, float(np.nanpercentile(all_values, 99)) + 0.035)
+    ax.set_xlim(0, int(x.max()))
+    ax.set_ylim(ymin, ymax)
     ax.set_xlabel("Held-out test sample number")
-    ax.set_ylabel(r"Spatial correlation $\rho_n$")
-    ax.set_title("Spatial pattern correlation", fontsize=7.5, pad=4)
-    ax.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.45, alpha=0.55)
+    ax.set_ylabel(r"Spatial correlation, $\rho_n$")
+    ax.set_title("Spatial pattern correlation", fontsize=8.2, pad=4)
+    ax.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.45, alpha=0.65, zorder=0)
+    ax.set_axisbelow(True)
+
+    ax.legend(
+        loc="center",
+        bbox_to_anchor=(0.7, 0.65),
+        fontsize=6.7,
+        handlelength=1.8,
+        borderaxespad=0.0,
+        frameon=False,
+    )
+
     ax.spines["left"].set_color(PALETTE["neutral_mid"])
     ax.spines["bottom"].set_color(PALETTE["neutral_mid"])
-    ax.legend(
-        loc="lower center",
-        bbox_to_anchor=(0.5, 0.03),
-        ncol=2,
-        fontsize=6.7,
-        handlelength=1.7,
-        columnspacing=1.4,
-    )
+    ax.tick_params(labelsize=6.8)
 
     save_figure(fig, output_prefix)
     plt.close(fig)
-
 
 def main() -> None:
     args = parse_args()
