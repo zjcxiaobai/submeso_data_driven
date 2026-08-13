@@ -20,23 +20,103 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from data_utils import build_dataloaders  # noqa: E402
-from integrated_gradients_encoder_convlstm import (  # noqa: E402
-    DEFAULT_FEATURE_NAMES,
-    denormalize_y,
-    integrated_gradients,
-    make_baseline,
-    reshape_attribution,
-    resolve_path,
-)
 from models import build_model  # noqa: E402
 from utils import get_device, load_config, seed_everything  # noqa: E402
 
 
-DEFAULT_CONFIG = PROJECT_DIR / "configs/unet_encoder_convlstm_shuffle_all_upper_40x20.yaml"
-DEFAULT_SELECTION = (
-    HERE
-    / "all_test_mean_ig_mean_abs_zero_steps64.npz"
-)
+DEFAULT_FEATURE_NAMES = [
+    "U velocity",
+    "V velocity",
+    "W velocity",
+    "Vorticity",
+    "Strain",
+    "Potential temperature",
+    "Density",
+    "KPP boundary layer depth",
+]
+
+
+def resolve_path(path: Path, root: Path) -> Path:
+    path = Path(path).expanduser()
+    return path if path.is_absolute() else root / path
+
+
+def denormalize_y(values: torch.Tensor, stats, normalize_y: bool) -> torch.Tensor:
+    if not normalize_y:
+        return values
+    mean = torch.as_tensor(stats.y_mean, dtype=values.dtype, device=values.device)
+    std = torch.as_tensor(stats.y_std, dtype=values.dtype, device=values.device)
+    return values * std + mean
+
+
+def make_baseline(x: torch.Tensor, mode: str) -> torch.Tensor:
+    if mode == "zero":
+        return torch.zeros_like(x)
+    if mode == "sample_mean":
+        return x.mean(dim=(-2, -1), keepdim=True).expand_as(x).clone()
+    raise ValueError(f"Unknown baseline mode: {mode}")
+
+
+def integrated_gradients(
+    model: torch.nn.Module,
+    x: torch.Tensor,
+    baseline: torch.Tensor,
+    *,
+    stats,
+    normalize_y: bool,
+    steps: int,
+    diagnostic: str,
+    pixel_y: int | None = None,
+    pixel_x: int | None = None,
+    verbose: bool = False,
+) -> tuple[torch.Tensor, float, torch.Tensor]:
+    if diagnostic != "pixel":
+        raise ValueError("This grid-cell script currently supports diagnostic='pixel' only.")
+    if pixel_y is None or pixel_x is None:
+        raise ValueError("pixel_y and pixel_x are required for pixel Integrated Gradients.")
+
+    delta = x - baseline
+    total_grad = torch.zeros_like(x)
+    prediction = None
+    objective_value = float("nan")
+    for step_number in range(1, steps + 1):
+        alpha = float(step_number) / float(steps)
+        scaled = (baseline + alpha * delta).detach().requires_grad_(True)
+        model.zero_grad(set_to_none=True)
+        pred_norm = model(scaled)
+        pred = denormalize_y(pred_norm, stats, normalize_y)
+        objective = pred[:, 0, int(pixel_y), int(pixel_x)].sum()
+        objective.backward()
+        if scaled.grad is None:
+            raise RuntimeError("Integrated Gradients gradient is None")
+        total_grad += scaled.grad.detach()
+        if step_number == steps:
+            prediction = pred.detach()
+            objective_value = float(objective.detach().cpu().item())
+        if verbose and (step_number == 1 or step_number == steps or step_number % max(1, steps // 4) == 0):
+            print(f"  IG step {step_number}/{steps}", flush=True)
+
+    attribution = delta * total_grad / float(steps)
+    if prediction is None:
+        with torch.no_grad():
+            prediction = denormalize_y(model(x), stats, normalize_y)
+    return attribution.detach(), objective_value, prediction.detach()
+
+
+def reshape_attribution(attribution: np.ndarray, sequence_length: int, frame_channels: int) -> np.ndarray:
+    if attribution.ndim != 4 or attribution.shape[0] != 1:
+        raise ValueError(f"Expected attribution shape (1, C, H, W), got {attribution.shape}")
+    channels = attribution.shape[1]
+    if channels != sequence_length * frame_channels:
+        raise ValueError(
+            f"Attribution channel count {channels} does not match sequence_length*frame_channels "
+            f"{sequence_length * frame_channels}"
+        )
+    return attribution[0].reshape(sequence_length, frame_channels, attribution.shape[2], attribution.shape[3])
+
+
+DEFAULT_CONFIG = HERE / "config_model_analysis.yaml"
+DEFAULT_SELECTION = PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz"
 DEFAULT_OUTPUT_DIR = HERE
 
 
@@ -90,11 +170,23 @@ def select_snapshots(
     if not 0.0 < flux_quantile < 0.5:
         raise ValueError("--flux-quantile must be between 0 and 0.5")
     with np.load(selection_path, allow_pickle=True) as selection:
-        indices = np.asarray(selection["sample_indices"], dtype=np.int64)
-        objective = np.asarray(selection["objective_values"], dtype=np.float64)
+        if {"sample_indices", "objective_values"}.issubset(selection.files):
+            indices = np.asarray(selection["sample_indices"], dtype=np.int64)
+            objective = np.asarray(selection["objective_values"], dtype=np.float64)
+        elif {"sample_index", "prediction"}.issubset(selection.files):
+            indices = np.asarray(selection["sample_index"], dtype=np.int64)
+            prediction = np.asarray(selection["prediction"], dtype=np.float64)
+            objective = np.nanmean(np.abs(prediction), axis=(1, 2, 3))
+        else:
+            raise ValueError(
+                f"{selection_path} must contain either sample_indices/objective_values "
+                "or sample_index/prediction arrays"
+            )
+    keep = np.isin(indices, test_indices)
+    indices = indices[keep]
+    objective = objective[keep]
     threshold = float(np.quantile(objective, 1.0 - flux_quantile))
     candidates = np.sort(indices[objective >= threshold])
-    candidates = candidates[np.isin(candidates, test_indices)]
     if len(candidates) < num_snapshots:
         raise ValueError(
             f"Only {len(candidates)} top-flux candidates are available; "
