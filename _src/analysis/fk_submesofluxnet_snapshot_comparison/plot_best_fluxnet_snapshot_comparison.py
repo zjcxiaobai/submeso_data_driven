@@ -186,11 +186,11 @@ def format_map_axis(ax: plt.Axes) -> None:
         spine.set_visible(False)
 
 
-def add_cbar(fig: plt.Figure, image, axes, label: str) -> None:
-    cbar = fig.colorbar(image, ax=axes, fraction=0.035, pad=0.018)
-    cbar.ax.tick_params(labelsize=6, length=2, width=0.55, colors=PALETTE["neutral_dark"])
+def add_cbar(fig: plt.Figure, image, cax: plt.Axes, label: str) -> None:
+    cbar = fig.colorbar(image, cax=cax)
+    cbar.ax.tick_params(labelsize=5.8, length=2, width=0.55, colors=PALETTE["neutral_dark"])
     cbar.outline.set_linewidth(0.55)
-    cbar.set_label(label, fontsize=6.3, color=PALETTE["neutral_dark"], labelpad=2)
+    cbar.set_label(label, fontsize=5.9, color=PALETTE["neutral_dark"], labelpad=1.5)
 
 
 def log_magnitude_limits(*arrays: np.ndarray) -> tuple[float, float]:
@@ -316,9 +316,10 @@ def draw_main_figure(
     error_norm = Normalize(vmin=0.0, vmax=max(error_limit, 1.0e-6))
     corr_norm = TwoSlopeNorm(vmin=-1.0, vcenter=0.0, vmax=1.0)
 
-    fig = plt.figure(figsize=(6.35, 3), constrained_layout=True)
-    grid = fig.add_gridspec(3, 3, width_ratios=[1.0, 1.0, 1.0], height_ratios=[1.0, 1.0, 1.0])
+    fig = plt.figure(figsize=(6.65, 3.05), constrained_layout=True)
+    grid = fig.add_gridspec(3, 4, width_ratios=[1.0, 1.0, 1.0, 0.035], height_ratios=[1.0, 1.0, 1.0], wspace=0.04)
     axes = np.asarray([[fig.add_subplot(grid[row, col]) for col in range(3)] for row in range(3)])
+    cbar_axes = [fig.add_subplot(grid[row, 3]) for row in range(3)]
 
     truth_image = axes[0, 0].imshow(truth_best, origin="lower", cmap="RdBu_r", norm=field_norm, interpolation="nearest")
     axes[0, 0].set_title("Truth", fontsize=7.5, pad=4)
@@ -332,7 +333,7 @@ def draw_main_figure(
         pred_image = ax.imshow(values, origin="lower", cmap="RdBu_r", norm=field_norm, interpolation="nearest")
         ax.set_title(title, fontsize=7.2, pad=4)
         format_map_axis(ax)
-    add_cbar(fig, pred_image if pred_image is not None else truth_image, [axes[0, 0], axes[0, 1], axes[0, 2]], r"Heat flux (W m$^{-2}$)")
+    add_cbar(fig, pred_image if pred_image is not None else truth_image, cbar_axes[0], r"Heat flux (W m$^{-2}$)")
 
     error_image = None
     for ax, title, values in (
@@ -342,7 +343,7 @@ def draw_main_figure(
         error_image = ax.imshow(values, origin="lower", cmap="magma", norm=error_norm, interpolation="nearest")
         ax.set_title(title, fontsize=7.2, pad=4)
         format_map_axis(ax)
-    add_cbar(fig, error_image, [axes[1, 1], axes[1, 2]], "Normalized squared error\n" + r"$(\Delta/\sigma_y)^2$")
+    add_cbar(fig, error_image, cbar_axes[1], r"Error $(\Delta/\sigma_y)^2$")
 
     corr_image = None
     for ax, title, values in (
@@ -352,7 +353,7 @@ def draw_main_figure(
         corr_image = ax.imshow(values, origin="lower", cmap="RdBu_r", norm=corr_norm, interpolation="nearest")
         ax.set_title(title, fontsize=7.2, pad=4)
         format_map_axis(ax)
-    add_cbar(fig, corr_image, [axes[2, 1], axes[2, 2]], r"Pearson correlation $\rho$")
+    add_cbar(fig, corr_image, cbar_axes[2], r"Pearson correlation $\rho$")
 
     for ax in (axes[1, 0], axes[2, 0]):
         ax.set_axis_off()
