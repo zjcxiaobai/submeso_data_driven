@@ -21,12 +21,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--r2-series",
         type=Path,
-        default=HERE / "upper_model_on_lower_40x20_shuffle_all_r2_series.csv",
+        default=HERE / "upper_model_on_lower_40x20_model_analysis_r2_series.csv",
     )
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=HERE / "upper_model_on_lower_40x20_shuffle_all_r2_series",
+        default=HERE / "upper_model_on_lower_40x20_model_analysis_r2_series",
     )
     parser.add_argument(
         "--summary-output",

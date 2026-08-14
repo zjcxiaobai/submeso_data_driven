@@ -29,17 +29,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fluxnet-predictions",
         type=Path,
-        default=PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz",
     )
     parser.add_argument(
         "--fk-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_test_Ce2p13062237_prediction_physical.npz",
+        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_prediction.npz",
     )
     parser.add_argument("--output-prefix", type=Path, default=HERE / "time_mean_skill_comparison")
     parser.add_argument("--csv-output", type=Path, default=HERE / "time_mean_skill_comparison.csv")
     parser.add_argument("--summary-output", type=Path, default=HERE / "time_mean_skill_comparison_summary.txt")
-    parser.add_argument("--fk-display-label", default="FK", help="Display label for the FK/MLE baseline in plots and logs.")
+    parser.add_argument("--fk-display-label", default="MLE parameterization", help="Display label for the FK/MLE baseline in plots and logs.")
     parser.add_argument(
         "--windows",
         type=int,

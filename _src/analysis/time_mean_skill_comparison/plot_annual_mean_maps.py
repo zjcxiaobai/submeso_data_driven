@@ -24,12 +24,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fluxnet-predictions",
         type=Path,
-        default=PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz",
     )
     parser.add_argument(
         "--fk-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_test_Ce2p13062237_prediction_physical.npz",
+        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_prediction.npz",
     )
     parser.add_argument("--window", type=int, default=365, help="Averaging window in model days/snapshots.")
     parser.add_argument("--block-index", type=int, default=0, help="Annual block to plot after trimming to full blocks.")
@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-prefix", type=Path, default=HERE / "annual_mean_maps")
     parser.add_argument("--summary-output", type=Path, default=HERE / "annual_mean_maps_summary.txt")
     parser.add_argument("--data-output", type=Path, default=HERE / "annual_mean_maps_data.npz")
-    parser.add_argument("--fk-display-label", default="FK", help="Display label for the FK/MLE baseline in plots and logs.")
+    parser.add_argument("--fk-display-label", default="MLE parameterization", help="Display label for the FK/MLE baseline in plots and logs.")
     return parser.parse_args()
 
 
@@ -175,11 +175,11 @@ def format_map_axis(ax: plt.Axes) -> None:
         spine.set_visible(False)
 
 
-def add_cbar(fig: plt.Figure, image, axes, label: str) -> None:
-    cbar = fig.colorbar(image, ax=axes, fraction=0.04, pad=0.018)
-    cbar.ax.tick_params(labelsize=6, length=2, width=0.55, colors=PALETTE["neutral_dark"])
+def add_cbar(fig: plt.Figure, image, cax: plt.Axes, label: str) -> None:
+    cbar = fig.colorbar(image, cax=cax)
+    cbar.ax.tick_params(labelsize=5.8, length=2, width=0.55, colors=PALETTE["neutral_dark"])
     cbar.outline.set_linewidth(0.55)
-    cbar.set_label(label, fontsize=6.3, color=PALETTE["neutral_dark"], labelpad=2)
+    cbar.set_label(label, fontsize=5.9, color=PALETTE["neutral_dark"], labelpad=1.5)
 
 
 def save_figure(fig: plt.Figure, output_prefix: Path) -> None:
@@ -213,9 +213,10 @@ def draw_figure(
         error_limit = float(np.nanmax(error_values))
     error_norm = Normalize(vmin=0.0, vmax=max(error_limit, 1.0e-6))
 
-    fig = plt.figure(figsize=(7, 2.65), constrained_layout=True)
-    grid = fig.add_gridspec(2, 3, width_ratios=[1.0, 1.0, 1.0], height_ratios=[1.0, 1.0])
+    fig = plt.figure(figsize=(7.25, 2.65), constrained_layout=True)
+    grid = fig.add_gridspec(2, 4, width_ratios=[1.0, 1.0, 1.0, 0.035], height_ratios=[1.0, 1.0], wspace=0.04)
     axes = np.asarray([[fig.add_subplot(grid[row, col]) for col in range(3)] for row in range(2)])
+    cbar_axes = [fig.add_subplot(grid[row, 3]) for row in range(2)]
 
     field_image = None
     for ax, title, values in (
@@ -226,7 +227,7 @@ def draw_figure(
         field_image = ax.imshow(values, origin="lower", cmap="RdBu_r", norm=field_norm, interpolation="nearest")
         ax.set_title(title, fontsize=7.5, pad=4)
         format_map_axis(ax)
-    add_cbar(fig, field_image, [axes[0, 0], axes[0, 1], axes[0, 2]], r"Annual-mean heat flux (W m$^{-2}$)")
+    add_cbar(fig, field_image, cbar_axes[0], r"Annual-mean heat flux (W m$^{-2}$)")
 
     axes[1, 0].set_axis_off()
     error_image = None
@@ -237,7 +238,7 @@ def draw_figure(
         error_image = ax.imshow(values, origin="lower", cmap="magma", norm=error_norm, interpolation="nearest")
         ax.set_title(title, fontsize=7.5, pad=4)
         format_map_axis(ax)
-    add_cbar(fig, error_image, [axes[1, 1], axes[1, 2]], "Normalized squared error\n" + r"$(\Delta/\sigma_y)^2$")
+    add_cbar(fig, error_image, cbar_axes[1], r"Error $(\Delta/\sigma_y)^2$")
 
     save_figure(fig, output_prefix)
     plt.close(fig)

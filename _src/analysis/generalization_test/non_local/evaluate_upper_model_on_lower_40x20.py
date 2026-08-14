@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate an upper_40x20 trained model on all lower_40x20 samples."""
+"""Evaluate the current upper_40x20 model_analysis checkpoint on lower_40x20 samples."""
 
 from __future__ import annotations
 
@@ -19,7 +19,9 @@ if str(PROJECT_DIR) not in sys.path:
 from data_utils.npy_dataset import (  # noqa: E402
     NormStats,
     NpyRegressionDataset,
+    load_or_compute_stats,
     parse_temporal_offsets,
+    split_indices,
     valid_center_indices,
 )
 from models import build_model  # noqa: E402
@@ -36,23 +38,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         type=Path,
-        default=PROJECT_DIR / "configs/unet_encoder_convlstm_shuffle_all_upper_40x20.yaml",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs/config.yaml",
     )
     parser.add_argument(
         "--checkpoint",
         type=Path,
         default=None,
-        help="Checkpoint path. Default: train.best_checkpoint from --config.",
+        help="Checkpoint path. Default: analysis/model_analysis/outputs/checkpoints/best.pt.",
     )
-    parser.add_argument(
-        "--domain",
-        default="lower_40x20",
-        help="Domain folder under data/train_on_small_domain. Default: lower_40x20.",
-    )
+    parser.add_argument("--eval-x", type=Path, default=PROJECT_DIR / "data/lower_40x20/X.npy")
+    parser.add_argument("--eval-y", type=Path, default=PROJECT_DIR / "data/lower_40x20/y.npy")
+    parser.add_argument("--stats-x", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/X.npy")
+    parser.add_argument("--stats-y", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/y.npy")
+    parser.add_argument("--stats-path", type=Path, default=PROJECT_DIR / "analysis/model_analysis/outputs/norm_stats.npz")
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=HERE / "upper_model_on_lower_40x20_shuffle_all",
+        default=HERE / "upper_model_on_lower_40x20_model_analysis",
     )
     parser.add_argument("--device", default=None)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -110,11 +112,22 @@ def main() -> None:
     normalize_y = bool(data_cfg.get("normalize_y", True))
     temporal_offsets = parse_temporal_offsets(data_cfg)
 
-    stats = load_stats(PROJECT_DIR / data_cfg["stats_path"])
-    domain_dir = PROJECT_DIR / "data/train_on_small_domain" / args.domain
+    stats_probe = np.load(args.stats_x, mmap_mode="r")
+    stats_centers = valid_center_indices(stats_probe.shape[0], temporal_offsets)
+    train_pos, _, _ = split_indices(stats_centers.shape[0], data_cfg["split"], seed)
+    stats_scope = str(data_cfg.get("stats_scope", "train")).lower()
+    stats_idx = stats_centers[train_pos] if stats_scope == "train" else stats_centers
+    stats = load_or_compute_stats(
+        args.stats_x,
+        args.stats_y,
+        stats_idx,
+        args.stats_path,
+        temporal_offsets=temporal_offsets,
+        stats_scope=stats_scope,
+    )
     dataset = NpyRegressionDataset(
-        domain_dir / "X.npy",
-        domain_dir / "y.npy",
+        args.eval_x,
+        args.eval_y,
         stats=stats,
         normalize_x=bool(data_cfg.get("normalize_x", True)),
         normalize_y=normalize_y,
@@ -129,7 +142,7 @@ def main() -> None:
         pin_memory=device.type == "cuda",
     )
 
-    checkpoint_path = args.checkpoint or Path(config["train"]["best_checkpoint"])
+    checkpoint_path = args.checkpoint or (PROJECT_DIR / "analysis/model_analysis/outputs/checkpoints/best.pt")
     model = build_model(config["model"]).to(device)
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state"])
@@ -198,7 +211,11 @@ def main() -> None:
     with summary_output.open("w") as handle:
         handle.write(f"Config: {args.config}\n")
         handle.write(f"Checkpoint: {checkpoint_path}\n")
-        handle.write(f"Domain: {args.domain}\n")
+        handle.write(f"Eval X: {args.eval_x}\n")
+        handle.write(f"Eval y: {args.eval_y}\n")
+        handle.write(f"Stats X: {args.stats_x}\n")
+        handle.write(f"Stats y: {args.stats_y}\n")
+        handle.write(f"Stats path: {args.stats_path}\n")
         handle.write(f"Temporal offsets: {temporal_offsets}\n")
         handle.write(f"Samples evaluated: {sample_indices.size}\n")
         handle.write(f"First sample_index: {int(sample_indices[0])}\n")
