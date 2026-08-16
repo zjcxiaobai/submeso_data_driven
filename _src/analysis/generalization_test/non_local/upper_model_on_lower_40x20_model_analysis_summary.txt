@@ -1,0 +1,19 @@
+Config: /scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/outputs/config.yaml
+Checkpoint: /scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/outputs/checkpoints/best.pt
+Eval X: /scratch/jczhang/submeso_data_driven/_src/analysis/generalization_test/non_local/evaluation_subdomain/X.npy
+Eval y: /scratch/jczhang/submeso_data_driven/_src/analysis/generalization_test/non_local/evaluation_subdomain/y.npy
+Eval time_index: /scratch/jczhang/submeso_data_driven/_src/analysis/generalization_test/non_local/evaluation_subdomain/time_index.npy
+Stats X: /scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/data/X.npy
+Stats y: /scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/data/y.npy
+Stats path: /scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/outputs/norm_stats.npz
+Temporal offsets: [-8, -7, -6, -5, -4, -3, -2, -1, 0]
+Samples evaluated: 11470
+First sample_index: 8
+Last sample_index: 11477
+First time_index: 6815088
+Last time_index: 26706096
+overall_r2: 0.42914364
+mean_per_sample_r2: 0.39416353
+median_per_sample_r2: 0.39764178
+overall_mse: 109.70428467
+overall_mae: 4.83221102

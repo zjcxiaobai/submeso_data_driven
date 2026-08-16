@@ -1,0 +1,37 @@
+{
+  "selection": "single_sample",
+  "sample_index": [
+    1379
+  ],
+  "time_index": [
+    9184176
+  ],
+  "selected_r2": null,
+  "mean_selected_r2": null,
+  "x_path": "/scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/data/X.npy",
+  "features": [
+    "U",
+    "V",
+    "W",
+    "zeta",
+    "strain",
+    "T",
+    "rho",
+    "kpphbl"
+  ],
+  "shape_nyx": [
+    1,
+    20,
+    40
+  ],
+  "dx_m": 50000.0,
+  "dy_m": 50000.0,
+  "periodic_x": true,
+  "periodic_y": false,
+  "variable_count": 55,
+  "notes": [
+    "Physics diagnostics are saved per selected model_analysis sample, shape (N, 20, 40).",
+    "rho is the density channel used by the new model.",
+    "speed is not saved as a diagnostic; grad_speed is retained and derived from U and V for each sample."
+  ]
+}

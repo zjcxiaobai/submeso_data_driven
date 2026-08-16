@@ -1,0 +1,32 @@
+Non-local time-mean skill comparison
+metric: global R2 after block averaging prediction and truth over consecutive evaluation-subdomain snapshots
+time_window: evaluation_subdomain_best_1_year_window.csv
+snapshots_per_day: 2
+n_aligned_snapshots: 730
+start_time_index: 18759024
+end_time_index: 20018736
+time_index_median_spacing: 1728
+time_index_min_spacing: 1728
+time_index_max_spacing: 1728
+best_submesofluxnet_window_days: 240
+best_submesofluxnet_r2: 0.8091843068
+best_fk_window_days: 365
+best_fk_r2: 0.7266416518
+
+window_30_days
+window_snapshots: 60
+n_blocks: 12
+submesofluxnet_r2: 0.7337881148
+fk_r2: 0.4168430617
+
+window_90_days
+window_snapshots: 180
+n_blocks: 4
+submesofluxnet_r2: 0.7777265035
+fk_r2: 0.594275185
+
+window_365_days
+window_snapshots: 730
+n_blocks: 1
+submesofluxnet_r2: 0.8022610092
+fk_r2: 0.7266416518

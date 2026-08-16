@@ -1,0 +1,45 @@
+Non-local selected-year truth/prediction time-mean maps
+time_window: evaluation_subdomain_best_1_year_window.csv
+n_window_snapshots: 730
+start_time_index: 18759024
+end_time_index: 20018736
+
+Best snapshot
+r2: 0.7525731399
+n_snapshots: 1
+start_sample_index: 7100
+end_sample_index: 7100
+start_time_index: 19142640
+end_time_index: 19142640
+
+Worst snapshot
+r2: 0.05466510403
+n_snapshots: 1
+start_sample_index: 6964
+end_sample_index: 6964
+start_time_index: 18907632
+end_time_index: 18907632
+
+Monthly mean
+r2: 0.795091976
+n_snapshots: 60
+start_sample_index: 7178
+end_sample_index: 7237
+start_time_index: 19277424
+end_time_index: 19379376
+
+Seasonal mean
+r2: 0.8295717677
+n_snapshots: 180
+start_sample_index: 7058
+end_sample_index: 7237
+start_time_index: 19070064
+end_time_index: 19379376
+
+Annual mean
+r2: 0.8022610092
+n_snapshots: 730
+start_sample_index: 6878
+end_sample_index: 7607
+start_time_index: 18759024
+end_time_index: 20018736

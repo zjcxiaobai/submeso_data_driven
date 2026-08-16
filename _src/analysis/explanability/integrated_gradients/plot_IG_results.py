@@ -35,18 +35,16 @@ def style() -> None:
 
 def feature_order(names: list[str], geographic: np.ndarray) -> np.ndarray:
     scores = np.nansum(np.abs(geographic), axis=(1, 2))
-    preferred = ["Potential temperature", "Strain"]
-    preferred_indices = [names.index(name) for name in preferred if name in names]
-    remaining = [index for index in np.argsort(scores)[::-1] if index not in preferred_indices]
-    return np.asarray([*preferred_indices, *remaining], dtype=int)
+    return np.asarray(np.argsort(scores)[::-1], dtype=int)
 
 
 def feature_maps(
     values, names, output, title, cmap, signed=False, shared_scale=False,
-    cbar_label=None, figsize=(7.2, 2.25),
+    cbar_label=None, figsize=(10.4, 4.6),
 ):
     style()
     fig, axes = plt.subplots(2, 4, figsize=figsize, constrained_layout=True)
+    fig.set_constrained_layout_pads(w_pad=0.025, h_pad=0.035, wspace=0.025, hspace=0.04)
     global_finite = np.abs(values[np.isfinite(values)])
     shared_vmax = float(np.percentile(global_finite, 99)) if global_finite.size else 1.0
     for index, ax in enumerate(axes.ravel()):
@@ -57,16 +55,27 @@ def feature_maps(
             image, origin="lower", aspect="equal", cmap=cmap,
             vmin=-vmax if signed else 0, vmax=vmax, interpolation="nearest",
         )
-        ax.set_title(names[index], fontsize=7, pad=2)
+        ax.set_title(f"{index + 1}. {names[index]}", fontsize=8.4, pad=3)
+        ax.set_xticks([0, 20])
+        ax.set_yticks([0, 10])
+        ax.tick_params(labelsize=7.4, length=2.2, width=0.6)
         if index >= 4:
-            ax.set_xlabel("x index")
+            ax.set_xlabel("x index", fontsize=8.0)
+        else:
+            ax.set_xticklabels([])
         if index % 4 == 0:
-            ax.set_ylabel("y index")
-        cbar = fig.colorbar(mesh, ax=ax, fraction=0.046, pad=0.02)
+            ax.set_ylabel("y index", fontsize=8.0)
+        else:
+            ax.set_yticklabels([])
+        for spine in ax.spines.values():
+            spine.set_linewidth(0.6)
+        cbar = fig.colorbar(mesh, ax=ax, fraction=0.035, pad=0.014)
+        cbar.ax.tick_params(labelsize=6.8, length=2.0, width=0.55)
+        cbar.outline.set_linewidth(0.55)
         if cbar_label is not None and index % 4 == 3:
-            cbar.set_label(cbar_label, fontsize=6.5, labelpad=2)
-    fig.suptitle(title, fontsize=9)
-    fig.savefig(output, dpi=600, bbox_inches="tight")
+            cbar.set_label(cbar_label, fontsize=7.0, labelpad=2)
+    fig.suptitle(title, fontsize=10.0, y=1.02)
+    fig.savefig(output, dpi=600, bbox_inches="tight", pad_inches=0.03)
     plt.close(fig)
 
 
@@ -157,7 +166,10 @@ def main() -> None:
         offsets = np.asarray(data["temporal_offsets"], dtype=int)
         dx_km = float(data["dx_km"])
         dy_km = float(data["dy_km"])
+    raw_names = names
+    raw_geographic = geographic
     order = feature_order(names, geographic)
+    scores = np.nansum(np.abs(raw_geographic), axis=(1, 2))
     names = [names[index] for index in order]
     geographic = geographic[order]
     centered = centered[order]
@@ -165,6 +177,13 @@ def main() -> None:
     lag_feature = lag_feature[:, order]
     args.output_dir.mkdir(parents=True, exist_ok=True)
     prefix = args.output_dir / "top10_gridcell_ig"
+    with (args.output_dir / "top10_gridcell_ig_geographical_feature_rank.csv").open("w") as handle:
+        handle.write("rank,feature_index,feature_name,total_abs_ig,fraction_abs_ig\n")
+        total_score = float(np.nansum(scores))
+        for rank, feature_index in enumerate(order, start=1):
+            score = float(scores[feature_index])
+            fraction = score / total_score if total_score > 0 else float("nan")
+            handle.write(f"{rank},{int(feature_index)},{raw_names[feature_index]},{score:.10g},{fraction:.10g}\n")
     feature_maps(
         geographic, names, prefix.with_name(prefix.name + "_geographical_feature_maps.png"),
         "|IGs| contribution of Features", "magma", shared_scale=True, cbar_label="Mean |IGs|",
@@ -172,7 +191,7 @@ def main() -> None:
     feature_maps(
         signed, names, prefix.with_name(prefix.name + "_signed_contribution_maps.png"),
         "Signed |IGs| contribution of Features", "RdBu_r", signed=True, shared_scale=True,
-        cbar_label="Mean signed IGs", figsize=(7.2, 2.05),
+        cbar_label="Mean signed IGs", figsize=(10.4, 4.4),
     )
     curves = radial_curves(centered, dx_km, dy_km)
     target_centered_with_distance(
