@@ -31,8 +31,8 @@ from src.utils.wT_submeso import submeso_vertical_heat_flux  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_RUN_DIR = Path(
-    "/scratch/jczhang/MITgcm_baroclinic_instability_old/"
-    "MITgcm/verification/tutorial_reentrant_channel/run"
+    "/scratch/jczhang/MITgcm_BI/"
+    "verification/tutorial_reentrant_channel/run"
 )
 
 
@@ -405,7 +405,7 @@ def plot_heat_flux_domain_crops(
             aspect="equal",
         )
         ax.set_axis_off()
-        title = "Analysis subdomain" if "analysis" in domain.name else "Evaluation subdomain"
+        title = "Training subdomain" if "analysis" in domain.name else "Evaluation subdomain"
         ax.set_title(title, fontsize=9, pad=8)
         item = asdict(domain)
         item.update(

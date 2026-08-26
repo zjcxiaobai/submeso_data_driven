@@ -1,0 +1,43 @@
+seed: 42
+device: auto
+
+data:
+  x_path: analysis/model_analysis/data/X.npy
+  y_path: analysis/model_analysis/data/y.npy
+  temporal_offsets: [-8, -7, -6, -5, -4, -3, -2, -1, 0]
+  split:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+  batch_size: 128
+  num_workers: 4
+  pin_memory: true
+  normalize_x: true
+  normalize_y: true
+
+model:
+  latent_channels: 8
+  input_channels: 72
+  height: 20
+  width: 40
+  encoder_channels: [32, 64]
+  decoder_channels: [32, 16]
+  dropout: 0.20
+
+train:
+  epochs: 250
+  lr: 3.0e-4
+  weight_decay: 3.0e-4
+  patience: 20
+  loss: huber
+  latent_smooth_weight: 1.0e-4
+  latent_corr_weight: 1.0e-4
+  checkpoint: analysis/bottleneck_feature_sweep/outputs/latent_8/end_to_end_bottleneck.pt
+  history_csv: analysis/bottleneck_feature_sweep/outputs/latent_8/history.csv
+
+output:
+  dir: analysis/bottleneck_feature_sweep/outputs/latent_8
+  predictions: analysis/bottleneck_feature_sweep/outputs/latent_8/test_predictions_denorm.npz
+  r2_series: analysis/bottleneck_feature_sweep/outputs/latent_8/test_r2_series.csv
+  summary: analysis/bottleneck_feature_sweep/outputs/latent_8/evaluation_summary.txt
+  stats: analysis/bottleneck_feature_sweep/outputs/latent_8/norm_stats.npz

@@ -1,5 +1,5 @@
 {
-  "run_dir": "/scratch/jczhang/MITgcm_baroclinic_instability_old/MITgcm/verification/tutorial_reentrant_channel/run",
+  "run_dir": "/scratch/jczhang/MITgcm_BI/verification/tutorial_reentrant_channel/run",
   "iteration": 26687088,
   "k_index": 2,
   "box_j": 10,

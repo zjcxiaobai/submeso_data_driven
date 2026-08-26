@@ -89,7 +89,10 @@ def calculate_fields(source: dict[str, np.ndarray], dx_m: float, dy_m: float, f0
     dvdy = ddy_nonperiodic(v, dy_m)
     dwdx = ddx_periodic(w, dx_m)
     dwdy = ddy_nonperiodic(w, dy_m)
+    drhodx = ddx_periodic(density, dx_m)
+    drhody = ddy_nonperiodic(density, dy_m)
     grad_t = np.hypot(dtdx, dtdy)
+    grad_rho = np.hypot(drhodx, drhody)
     divergence = dudx + dvdy
     vorticity_derived = dvdx - dudy
     normal_strain = dudx - dvdy
@@ -98,6 +101,7 @@ def calculate_fields(source: dict[str, np.ndarray], dx_m: float, dy_m: float, f0
     okubo_weiss = strain_derived**2 - vorticity_derived**2
 
     frontogenesis_numerator = dtdx**2 * dudx + dtdy**2 * dvdy + dtdx * dtdy * (dudy + dvdx)
+    gradt_dot_strain_tensor_gradt = frontogenesis_numerator
     frontogenesis_ft = safe_divide(-frontogenesis_numerator, grad_t)
     frontogenesis_rate = safe_divide(-frontogenesis_numerator, grad_t**2)
     qx = -(dudx * dtdx + dvdx * dtdy)
@@ -120,6 +124,7 @@ def calculate_fields(source: dict[str, np.ndarray], dx_m: float, dy_m: float, f0
     speed_derived = np.hypot(u, v)
     grad_speed = np.hypot(ddx_periodic(speed_derived, dx_m), ddy_nonperiodic(speed_derived, dy_m))
     f = np.broadcast_to(beta_plane_f(shape[0], f0, beta, domain_height_m, beta_reference), shape)
+    rossby_number = safe_divide(input_vorticity, f)
 
     fields: dict[str, np.ndarray] = {}
     definitions: dict[str, tuple[str, str]] = {}
@@ -137,6 +142,9 @@ def calculate_fields(source: dict[str, np.ndarray], dx_m: float, dy_m: float, f0
     add(fields, definitions, "dTdx", dtdx, "degC m-1", "Periodic centered zonal derivative of T")
     add(fields, definitions, "dTdy", dtdy, "degC m-1", "Nonperiodic meridional derivative of T")
     add(fields, definitions, "gradT", grad_t, "degC m-1", "sqrt(dTdx^2 + dTdy^2)")
+    add(fields, definitions, "drhodx", drhodx, "kg m-4", "Periodic centered zonal derivative of rho")
+    add(fields, definitions, "drhody", drhody, "kg m-4", "Nonperiodic meridional derivative of rho")
+    add(fields, definitions, "grad_rho", grad_rho, "kg m-4", "sqrt(drhodx^2 + drhody^2)")
     add(fields, definitions, "dUdx", dudx, "s-1", "Periodic centered zonal derivative of U")
     add(fields, definitions, "dUdy", dudy, "s-1", "Nonperiodic meridional derivative of U")
     add(fields, definitions, "dVdx", dvdx, "s-1", "Periodic centered zonal derivative of V")
@@ -163,6 +171,13 @@ def calculate_fields(source: dict[str, np.ndarray], dx_m: float, dy_m: float, f0
     add(fields, definitions, "Wprime_times_Tprime", w_anomaly * temperature_anomaly, "degC m s-1", "Spatial W anomaly times spatial T anomaly")
     add(fields, definitions, "W_times_gradT", w * grad_t, "degC s-1", "W times horizontal temperature-gradient magnitude")
     add(fields, definitions, "strain_times_gradT", input_strain * grad_t, "degC m-1 s-1", "Input strain times |gradT|")
+    add(fields, definitions, "S_gradT", input_strain * grad_t, "degC m-1 s-1", "Alias of input strain times |gradT|")
+    add(fields, definitions, "gradT_dot_S_gradT", gradt_dot_strain_tensor_gradt, "degC2 m-2 s-1", "gradT dot symmetric horizontal velocity-gradient tensor dot gradT")
+    add(fields, definitions, "strain_times_grad_rho", input_strain * grad_rho, "kg m-4 s-1", "Input strain times |grad rho|")
+    add(fields, definitions, "S_grad_rho", input_strain * grad_rho, "kg m-4 s-1", "Alias of input strain times |grad rho|")
+    add(fields, definitions, "abs_Ro_times_gradT", np.abs(rossby_number) * grad_t, "degC m-1", "|Ro| times |gradT|")
+    add(fields, definitions, "okubo_weiss_input_times_gradT", (input_strain**2 - input_vorticity**2) * grad_t, "degC m-1 s-2", "(input strain^2 - input vorticity^2) times |gradT|")
+    add(fields, definitions, "hbl_strain_times_gradT", kpphbl * input_strain * grad_t, "degC s-1", "KPPHBL times input strain times |gradT|")
     add(fields, definitions, "vorticity_times_gradT", input_vorticity * grad_t, "degC m-1 s-1", "Input vorticity times |gradT|")
     add(fields, definitions, "horizontal_T_advection", horizontal_temperature_advection, "degC s-1", "-(U dTdx + V dTdy)")
     add(fields, definitions, "cross_front_velocity", cross_front_velocity, "m s-1", "Velocity projected along gradT")
@@ -174,7 +189,7 @@ def calculate_fields(source: dict[str, np.ndarray], dx_m: float, dy_m: float, f0
     add(fields, definitions, "laplacian_T", laplacian_temperature, "degC m-2", "Horizontal Laplacian of T")
     add(fields, definitions, "laplacian_vorticity", laplacian_vorticity, "m-2 s-1", "Horizontal Laplacian of derived vorticity")
     add(fields, definitions, "coriolis_f", f, "s-1", "f0 + beta*(y-y_reference)")
-    add(fields, definitions, "Rossby_number", safe_divide(input_vorticity, f), "1", "Input vorticity divided by beta-plane f")
+    add(fields, definitions, "Rossby_number", rossby_number, "1", "Input vorticity divided by beta-plane f")
     add(fields, definitions, "Rossby_number_derived", safe_divide(vorticity_derived, f), "1", "Derived vorticity divided by beta-plane f")
     add(fields, definitions, "normalized_divergence", safe_divide(divergence, np.abs(f)), "1", "Divergence divided by |f|")
     add(fields, definitions, "strain_vorticity_ratio", safe_divide(strain_derived, np.abs(vorticity_derived)), "1", "Derived strain divided by |derived vorticity|")

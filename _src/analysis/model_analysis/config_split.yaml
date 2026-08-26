@@ -2,22 +2,23 @@ seed: 42
 device: auto
 
 data:
-  x_path: analysis/shuffle_upper40x20_mld_rho_9features/data/X.npy
-  y_path: analysis/shuffle_upper40x20_mld_rho_9features/data/y.npy
+  x_path: analysis/model_analysis/data/X.npy
+  y_path: analysis/model_analysis/data/y.npy
   batch_size: 128
   num_workers: 4
   pin_memory: true
   split:
+    method: raw_time_blocks
     train: 0.8
     val: 0.1
     test: 0.1
-    shuffle: true
+    shuffle: false
     shuffle_train_val: false
   shuffle_train_loader: false
   normalize_x: true
   normalize_y: true
   stats_scope: train
-  stats_path: analysis/shuffle_upper40x20_mld_rho_9features/outputs_split_80_10_10/norm_stats.npz
+  stats_path: analysis/model_analysis/outputs_update/norm_stats.npz
   temporal_offsets: [-8, -7, -6, -5, -4, -3, -2, -1, 0]
   augment_x_roll: false
 
@@ -56,8 +57,8 @@ train:
   amp: true
   grad_clip_norm: 1.0
   early_stopping_patience: 15
-  checkpoint_dir: analysis/shuffle_upper40x20_mld_rho_9features/outputs_split_80_10_10/checkpoints
-  best_checkpoint: analysis/shuffle_upper40x20_mld_rho_9features/outputs_split_80_10_10/checkpoints/best.pt
-  last_checkpoint: analysis/shuffle_upper40x20_mld_rho_9features/outputs_split_80_10_10/checkpoints/last.pt
-  history_csv: analysis/shuffle_upper40x20_mld_rho_9features/outputs_split_80_10_10/history.csv
-  config_snapshot: analysis/shuffle_upper40x20_mld_rho_9features/outputs_split_80_10_10/config.yaml
+  checkpoint_dir: model_analysis/outputs_update/checkpoints
+  best_checkpoint: model_analysis/outputs_update/checkpoints/best.pt
+  last_checkpoint: model_analysis/outputs_update/checkpoints/last.pt
+  history_csv: model_analysis/outputs_update/history.csv
+  config_snapshot: model_analysis/outputs_update/config.yaml

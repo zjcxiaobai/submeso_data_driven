@@ -28,7 +28,7 @@
   "dy_m": 50000.0,
   "periodic_x": true,
   "periodic_y": false,
-  "variable_count": 55,
+  "variable_count": 65,
   "notes": [
     "Physics diagnostics are saved per selected model_analysis sample, shape (N, 20, 40).",
     "rho is the density channel used by the new model.",
