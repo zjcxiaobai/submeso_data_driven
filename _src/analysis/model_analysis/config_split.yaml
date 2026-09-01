@@ -4,7 +4,7 @@ device: auto
 data:
   x_path: analysis/model_analysis/data/X.npy
   y_path: analysis/model_analysis/data/y.npy
-  batch_size: 128
+  batch_size: 64
   num_workers: 4
   pin_memory: true
   split:
@@ -18,20 +18,20 @@ data:
   normalize_x: true
   normalize_y: true
   stats_scope: train
-  stats_path: analysis/model_analysis/outputs_update/norm_stats.npz
-  temporal_offsets: [-8, -7, -6, -5, -4, -3, -2, -1, 0]
+  stats_path: analysis/model_analysis/outputs_final/norm_stats.npz
+  temporal_offsets: [-5, -4, -3, -2, -1, 0]
   augment_x_roll: false
 
 model:
   name: UNet_3Layers_EncoderConvLSTM
-  in_channels: 72
+  in_channels: 48
   out_channels: 1
-  base_channels: 128
+  base_channels: 64
   kernel_size: 3
   norm: bn
-  dropout: 0.25
+  dropout: 0.15
   activation: silu
-  sequence_length: 9
+  sequence_length: 6
   frame_channels: 8
   convlstm_kernel_size: 3
 
@@ -45,20 +45,20 @@ loss:
 
 optimizer:
   name: adamw
-  lr: 0.0008306357642686378
-  weight_decay: 0.0003
+  lr: 0.0018
+  weight_decay: 0.0001
 
 scheduler:
   name: cosine
   min_lr: 0.000001
 
 train:
-  epochs: 300
+  epochs: 250
   amp: true
   grad_clip_norm: 1.0
-  early_stopping_patience: 15
-  checkpoint_dir: model_analysis/outputs_update/checkpoints
-  best_checkpoint: model_analysis/outputs_update/checkpoints/best.pt
-  last_checkpoint: model_analysis/outputs_update/checkpoints/last.pt
-  history_csv: model_analysis/outputs_update/history.csv
-  config_snapshot: model_analysis/outputs_update/config.yaml
+  early_stopping_patience: 40
+  checkpoint_dir: model_analysis/outputs_final/checkpoints
+  best_checkpoint: model_analysis/outputs_final/checkpoints/best.pt
+  last_checkpoint: model_analysis/outputs_final/checkpoints/last.pt
+  history_csv: model_analysis/outputs_final/history.csv
+  config_snapshot: model_analysis/outputs_final/config.yaml

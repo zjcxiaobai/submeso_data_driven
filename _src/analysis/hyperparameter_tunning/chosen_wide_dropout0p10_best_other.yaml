@@ -33,7 +33,7 @@ model:
   decoder_channels:
   - 64
   - 32
-  dropout: 0.1
+  dropout: 0.15
   temporal_reduce: final
 train:
   epochs: 250
