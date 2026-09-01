@@ -1,0 +1,53 @@
+seed: 42
+device: auto
+data:
+  x_path: analysis/model_analysis/data/X.npy
+  y_path: analysis/model_analysis/data/y.npy
+  temporal_offsets:
+  - -5
+  - -4
+  - -3
+  - -2
+  - -1
+  - 0
+  split:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+  batch_size: 64
+  num_workers: 4
+  pin_memory: true
+  normalize_x: true
+  normalize_y: true
+model:
+  input_channels: 8
+  latent_channels: 4
+  height: 20
+  width: 40
+  spatial_channels:
+  - 128
+  - 256
+  - 384
+  temporal_channels: 384
+  temporal_layers: 4
+  decoder_channels:
+  - 128
+  - 64
+  dropout: 0.25
+  temporal_reduce: final
+train:
+  epochs: 250
+  lr: 0.0018
+  weight_decay: 0.0001
+  patience: 40
+  loss: huber
+  latent_smooth_weight: 0
+  latent_corr_weight: 0
+  checkpoint: analysis/hyperparameter_tunning/outputs_dropout_from_best_basis/dropout_0p25/temporal_bottleneck.pt
+  history_csv: analysis/hyperparameter_tunning/outputs_dropout_from_best_basis/dropout_0p25/history.csv
+output:
+  dir: analysis/hyperparameter_tunning/outputs_dropout_from_best_basis/dropout_0p25
+  predictions: analysis/hyperparameter_tunning/outputs_dropout_from_best_basis/dropout_0p25/test_predictions_denorm.npz
+  r2_series: analysis/hyperparameter_tunning/outputs_dropout_from_best_basis/dropout_0p25/test_r2_series.csv
+  summary: analysis/hyperparameter_tunning/outputs_dropout_from_best_basis/dropout_0p25/evaluation_summary.txt
+  stats: analysis/hyperparameter_tunning/outputs_dropout_from_best_basis/dropout_0p25/norm_stats.npz
