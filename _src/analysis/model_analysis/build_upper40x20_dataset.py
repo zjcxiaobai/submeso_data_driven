@@ -79,8 +79,7 @@ def main() -> None:
     }
     with (OUT_DIR / "metadata.json").open("w") as handle:
         json.dump(metadata, handle, indent=2)
-        handle.write("
-")
+        handle.write("\n")
 
     print(f"Saved X: {OUT_DIR / 'X.npy'} {x_upper.shape}")
     print(f"Saved y: {OUT_DIR / 'y.npy'} {y_upper.shape}")
