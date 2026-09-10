@@ -1,7 +1,7 @@
 {
   "selection": "temporally distributed snapshots from top predicted mean-absolute-flux decile",
   "flux_quantile": 0.1,
-  "flux_threshold": 3.98401573780179,
+  "flux_threshold": 3.9183831170499324,
   "num_snapshots": 90,
   "targets_per_snapshot": [
     "strong_positive",
