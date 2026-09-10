@@ -19,9 +19,17 @@ if str(PROJECT_DIR) not in sys.path:
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from data_utils import build_dataloaders  # noqa: E402
-from models import build_model  # noqa: E402
-from utils import get_device, load_config, seed_everything  # noqa: E402
+from analysis.model_analysis.run_model_analysis import (  # noqa: E402
+    TemporalSequenceDataset,
+    build_model,
+    centers_in_block,
+    get_device,
+    load_config,
+    load_stats,
+    resolve,
+    seed_everything,
+    split_raw_blocks,
+)
 
 
 DEFAULT_FEATURE_NAMES = [
@@ -65,6 +73,7 @@ def integrated_gradients(
     stats,
     normalize_y: bool,
     steps: int,
+    ig_batch_size: int,
     diagnostic: str,
     pixel_y: int | None = None,
     pixel_x: int | None = None,
@@ -79,9 +88,17 @@ def integrated_gradients(
     total_grad = torch.zeros_like(x)
     prediction = None
     objective_value = float("nan")
-    for step_number in range(1, steps + 1):
-        alpha = float(step_number) / float(steps)
-        scaled = (baseline + alpha * delta).detach().requires_grad_(True)
+    ig_batch_size = max(1, min(int(ig_batch_size), int(steps)))
+    for start in range(1, steps + 1, ig_batch_size):
+        stop = min(steps, start + ig_batch_size - 1)
+        alphas = torch.linspace(
+            float(start) / float(steps),
+            float(stop) / float(steps),
+            stop - start + 1,
+            dtype=x.dtype,
+            device=x.device,
+        ).view(-1, 1, 1, 1, 1)
+        scaled = (baseline + alphas * delta).detach().requires_grad_(True)
         model.zero_grad(set_to_none=True)
         pred_norm = model(scaled)
         pred = denormalize_y(pred_norm, stats, normalize_y)
@@ -89,12 +106,12 @@ def integrated_gradients(
         objective.backward()
         if scaled.grad is None:
             raise RuntimeError("Integrated Gradients gradient is None")
-        total_grad += scaled.grad.detach()
-        if step_number == steps:
-            prediction = pred.detach()
-            objective_value = float(objective.detach().cpu().item())
-        if verbose and (step_number == 1 or step_number == steps or step_number % max(1, steps // 4) == 0):
-            print(f"  IG step {step_number}/{steps}", flush=True)
+        total_grad += scaled.grad.detach().sum(dim=0, keepdim=True)
+        if stop == steps:
+            prediction = pred[-1:].detach()
+            objective_value = float(pred[-1, 0, int(pixel_y), int(pixel_x)].detach().cpu().item())
+        if verbose and (start == 1 or stop == steps or stop % max(1, steps // 4) == 0):
+            print(f"  IG step {stop}/{steps}", flush=True)
 
     attribution = delta * total_grad / float(steps)
     if prediction is None:
@@ -104,19 +121,26 @@ def integrated_gradients(
 
 
 def reshape_attribution(attribution: np.ndarray, sequence_length: int, frame_channels: int) -> np.ndarray:
-    if attribution.ndim != 4 or attribution.shape[0] != 1:
-        raise ValueError(f"Expected attribution shape (1, C, H, W), got {attribution.shape}")
-    channels = attribution.shape[1]
-    if channels != sequence_length * frame_channels:
-        raise ValueError(
-            f"Attribution channel count {channels} does not match sequence_length*frame_channels "
-            f"{sequence_length * frame_channels}"
-        )
-    return attribution[0].reshape(sequence_length, frame_channels, attribution.shape[2], attribution.shape[3])
+    if attribution.ndim == 5 and attribution.shape[0] == 1:
+        if attribution.shape[1] != sequence_length or attribution.shape[2] != frame_channels:
+            raise ValueError(
+                f"Expected attribution shape (1, {sequence_length}, {frame_channels}, H, W), "
+                f"got {attribution.shape}"
+            )
+        return attribution[0]
+    if attribution.ndim == 4 and attribution.shape[0] == 1:
+        channels = attribution.shape[1]
+        if channels != sequence_length * frame_channels:
+            raise ValueError(
+                f"Attribution channel count {channels} does not match sequence_length*frame_channels "
+                f"{sequence_length * frame_channels}"
+            )
+        return attribution[0].reshape(sequence_length, frame_channels, attribution.shape[2], attribution.shape[3])
+    raise ValueError(f"Expected attribution shape (1, T, C, H, W) or (1, T*C, H, W), got {attribution.shape}")
 
 
-DEFAULT_CONFIG = HERE / "config_model_analysis.yaml"
-DEFAULT_SELECTION = PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz"
+DEFAULT_CONFIG = PROJECT_DIR / "analysis/model_analysis/config.yaml"
+DEFAULT_SELECTION = PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz"
 DEFAULT_OUTPUT_DIR = HERE
 
 
@@ -133,12 +157,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--device", default=None)
     parser.add_argument("--steps", type=int, default=64)
+    parser.add_argument("--ig-batch-size", type=int, default=16)
     parser.add_argument("--baseline", choices=["zero", "sample_mean"], default="zero")
     parser.add_argument("--flux-quantile", type=float, default=0.10)
     parser.add_argument("--num-snapshots", type=int, default=90)
     parser.add_argument("--dx-km", type=float, default=50.0)
     parser.add_argument("--dy-km", type=float, default=50.0)
     parser.add_argument("--progress-every", type=int, default=5)
+    parser.add_argument("--skip-compact-replot", action="store_true")
     parser.add_argument("--feature-names", nargs="+", default=DEFAULT_FEATURE_NAMES)
     return parser.parse_args()
 
@@ -233,6 +259,11 @@ def safe_divide(numerator: np.ndarray, denominator: np.ndarray) -> np.ndarray:
         out=np.full_like(numerator, np.nan, dtype=np.float64),
         where=denominator > 0,
     )
+
+
+def final_state_visible_lags(temporal_offsets: np.ndarray, temporal_layers: int) -> np.ndarray:
+    first_visible = max(0, len(temporal_offsets) - temporal_layers - 1)
+    return temporal_offsets[first_visible:]
 
 
 def map_grid(
@@ -382,40 +413,45 @@ def main() -> None:
     config = load_config(config_path)
     seed_everything(int(config.get("seed", 42)))
     device = get_device(args.device or config.get("device", "auto"))
-    config["data"]["batch_size"] = 1
-    config["data"]["num_workers"] = 0
-    config["data"]["pin_memory"] = False
-    _, _, test_loader, stats = build_dataloaders(
-        config, PROJECT_DIR, int(config.get("seed", 42))
+    data_cfg = config["data"]
+    x_path = resolve(PROJECT_DIR, data_cfg["x_path"])
+    y_path = resolve(PROJECT_DIR, data_cfg["y_path"])
+    temporal_offsets = [int(value) for value in data_cfg.get("temporal_offsets", [0])]
+    stats = load_stats(resolve(PROJECT_DIR, config["output"]["stats"]))
+    n_samples = np.load(x_path, mmap_mode="r").shape[0]
+    _, _, test_block = split_raw_blocks(n_samples, data_cfg["split"])
+    test_indices = centers_in_block(test_block, temporal_offsets)
+    test_dataset = TemporalSequenceDataset(
+        x_path,
+        y_path,
+        temporal_offsets=temporal_offsets,
+        stats=stats,
+        normalize_x=bool(data_cfg.get("normalize_x", True)),
+        normalize_y=bool(data_cfg.get("normalize_y", True)),
     )
-    test_subset = test_loader.dataset
-    test_indices = np.asarray(test_subset.indices, dtype=np.int64)
     selected_indices, flux_threshold = select_snapshots(
         resolve_path(args.selection_npz, PROJECT_DIR),
         test_indices,
         args.flux_quantile,
         args.num_snapshots,
     )
-    index_to_position = {int(index): position for position, index in enumerate(test_indices)}
 
-    model = build_model(config["model"]).to(device)
+    model = build_model(config).to(device)
     checkpoint_path = resolve_path(
-        args.checkpoint or Path(config["train"]["best_checkpoint"]), PROJECT_DIR
+        args.checkpoint or Path(config["train"]["checkpoint"]), PROJECT_DIR
     )
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint["model_state"])
+    model.load_state_dict(checkpoint["model_state"] if "model_state" in checkpoint else checkpoint)
     model.eval()
 
-    sequence_length = int(config["model"]["sequence_length"])
-    frame_channels = int(config["model"]["frame_channels"])
+    sequence_length = len(temporal_offsets)
+    frame_channels = int(config["model"]["input_channels"])
     feature_names = list(args.feature_names)
     if len(feature_names) != frame_channels:
         raise ValueError(f"Expected {frame_channels} feature names, got {len(feature_names)}")
-    temporal_offsets = np.asarray(
-        config["data"].get("temporal_offsets", range(sequence_length)), dtype=np.int64
-    )
+    temporal_offsets = np.asarray(temporal_offsets, dtype=np.int64)
     normalize_y = bool(config["data"].get("normalize_y", True))
-    first_x, _ = test_subset[index_to_position[int(selected_indices[0])]]
+    first_x, _ = test_dataset[int(selected_indices[0])]
     height, width = first_x.shape[-2:]
 
     geographic_sum = np.zeros((frame_channels, height, width), dtype=np.float64)
@@ -427,16 +463,25 @@ def main() -> None:
     target_records: list[dict[str, object]] = []
     target_total = args.num_snapshots * 3
 
+    temporal_layers = int(config["model"].get("temporal_layers", 0))
+    visible_lags = final_state_visible_lags(temporal_offsets, temporal_layers)
     print(
         f"Selected {args.num_snapshots} temporally distributed snapshots from the "
         f"top {args.flux_quantile:.0%}; threshold={flux_threshold:.6g}; "
         f"targets={target_total}",
         flush=True,
     )
+    if len(visible_lags) < len(temporal_offsets):
+        hidden_lags = temporal_offsets[: len(temporal_offsets) - len(visible_lags)]
+        print(
+            "Warning: temporal_reduce='final' with the current Conv3d stack can only "
+            f"attribute the final prediction to lags {visible_lags.tolist()}; "
+            f"earlier lags {hidden_lags.tolist()} are outside the final-state receptive field.",
+            flush=True,
+        )
     target_number = 0
     for snapshot_number, sample_index in enumerate(selected_indices, start=1):
-        position = index_to_position[int(sample_index)]
-        x_cpu, _ = test_subset[position]
+        x_cpu, _ = test_dataset[int(sample_index)]
         x = x_cpu.unsqueeze(0).to(device)
         baseline = make_baseline(x, args.baseline)
         with torch.no_grad():
@@ -451,6 +496,7 @@ def main() -> None:
                 stats=stats,
                 normalize_y=normalize_y,
                 steps=args.steps,
+                ig_batch_size=args.ig_batch_size,
                 diagnostic="pixel",
                 pixel_y=target_y,
                 pixel_x=target_x,
@@ -584,7 +630,9 @@ def main() -> None:
         "targets_per_snapshot": ["strong_positive", "strong_negative", "weak"],
         "target_count": target_total,
         "steps": args.steps,
+        "ig_batch_size": args.ig_batch_size,
         "baseline": args.baseline,
+        "final_state_visible_lags": visible_lags.astype(int).tolist(),
         "dx_km": args.dx_km,
         "dy_km": args.dy_km,
         "periodic_x": True,
@@ -597,6 +645,10 @@ def main() -> None:
         json.dumps(metadata, indent=2) + "\n"
     )
     print(f"Saved grid-cell IG outputs with prefix: {prefix}", flush=True)
+    if not args.skip_compact_replot:
+        from plot_IG_results import replot
+
+        replot(prefix.with_suffix(".npz"), output_dir)
 
 
 if __name__ == "__main__":

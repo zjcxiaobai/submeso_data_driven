@@ -2,25 +2,25 @@ Best and worst per-snapshot test cases
 error_definition: normalized_squared_error = ((prediction - truth) / std(truth_snapshot))^2
 
 Best case
-sample_index: 1379
-test_position: 909
-r2: 0.9725904129
-truth_min: -28.32979012
-truth_max: 366.6304321
-prediction_min: -26.84149361
-prediction_max: 360.4022827
-normalized_squared_error_mean: 0.02740958624
-normalized_squared_error_p95: 0.1018152678
-normalized_squared_error_p99: 0.6676739494
+sample_index: 10390
+test_position: 55
+r2: 0.8953667507
+truth_min: -20.08699608
+truth_max: 170.5680084
+prediction_min: -7.218099117
+prediction_max: 171.2371521
+normalized_squared_error_mean: 0.1046332434
+normalized_squared_error_p95: 0.6017749371
+normalized_squared_error_p99: 1.956913473
 
 Worst case
-sample_index: 153
-test_position: 695
-r2: 0.5686080754
-truth_min: -66.63587189
-truth_max: 147.2205963
-prediction_min: -30.71550179
-prediction_max: 115.067543
-normalized_squared_error_mean: 0.4313919635
-normalized_squared_error_p95: 1.293503807
-normalized_squared_error_p99: 6.914535652
+sample_index: 10820
+test_position: 485
+r2: 0.3247102499
+truth_min: -22.6160202
+truth_max: 66.49346161
+prediction_min: -9.69789505
+prediction_max: 41.31806564
+normalized_squared_error_mean: 0.6752897607
+normalized_squared_error_p95: 2.336708799
+normalized_squared_error_p99: 16.22891367

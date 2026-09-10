@@ -6,6 +6,8 @@ import csv
 from pathlib import Path
 
 import matplotlib as mpl
+
+mpl.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -98,14 +100,16 @@ def align_series(
     fk_sample: np.ndarray,
     fk_corr: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    flux_lookup = {int(s): i for i, s in enumerate(flux_sample)}
-    fk_lookup = {int(s): i for i, s in enumerate(fk_sample)}
-    common = np.asarray(sorted(set(flux_lookup).intersection(fk_lookup)), dtype=np.int64)
-    if common.size == 0:
-        raise ValueError("No common sample_index values between SubmesoFluxNet and MLE spatial-correlation CSVs.")
-    flux = np.asarray([flux_corr[flux_lookup[int(s)]] for s in common], dtype=np.float64)
-    fk = np.asarray([fk_corr[fk_lookup[int(s)]] for s in common], dtype=np.float64)
-    return common, flux, fk
+    if flux_sample.shape != fk_sample.shape or not np.array_equal(flux_sample, fk_sample):
+        flux_set = set(map(int, flux_sample))
+        fk_set = set(map(int, fk_sample))
+        raise ValueError(
+            "SubmesoFluxNet and MLE spatial-correlation sample_index values do not match exactly: "
+            f"fluxnet_rows={flux_sample.size}, mle_rows={fk_sample.size}, common={len(flux_set & fk_set)}, "
+            f"first_missing_from_mle={sorted(flux_set - fk_set)[:5]}, "
+            f"first_missing_from_fluxnet={sorted(fk_set - flux_set)[:5]}"
+        )
+    return flux_sample, flux_corr, fk_corr
 
 
 def summary(values: np.ndarray) -> dict[str, float | int]:
@@ -133,8 +137,8 @@ def write_summary(
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
         handle.write(f"SubmesoFluxNet versus {fk_label} spatial correlation\n")
-        handle.write(f"comparison_scope: sample_index intersection of {fk_label} and SubmesoFluxNet spatial-correlation CSVs\n")
-        handle.write(f"note: SubmesoFluxNet is restricted to the same {fk_label}-available subset before statistics are computed\n")
+        handle.write("comparison_scope: exact final model_analysis raw-time-block test split\n")
+        handle.write("note: SubmesoFluxNet and MLE sample_index values matched exactly before statistics were computed\n")
         handle.write(f"sample_index_range: {int(sample.min())}-{int(sample.max())}\n")
         handle.write(f"n_common_snapshots: {sample.size}\n")
         for label, vals in (("SubmesoFluxNet", flux_summary), (fk_label, fk_summary)):
@@ -151,7 +155,7 @@ def save_figure(fig: plt.Figure, output_prefix: Path) -> None:
     fig.savefig(Path(f"{output_prefix}.png"), dpi=600, bbox_inches="tight")
 
 
-def rolling_median(values: np.ndarray, window: int = 31) -> np.ndarray:
+def rolling_median(values: np.ndarray, window: int = 81) -> np.ndarray:
     if values.size < 3:
         return values.copy()
     window = min(window, values.size if values.size % 2 == 1 else values.size - 1)

@@ -5,6 +5,8 @@ import argparse
 from pathlib import Path
 
 import matplotlib as mpl
+
+mpl.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -23,7 +25,7 @@ PALETTE = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Combine encoder-ConvLSTM feature-ablation time series with sorted feature importance."
+        description="Combine final model_analysis separated-time feature-ablation time series with sorted feature importance."
     )
     parser.add_argument(
         "--input",

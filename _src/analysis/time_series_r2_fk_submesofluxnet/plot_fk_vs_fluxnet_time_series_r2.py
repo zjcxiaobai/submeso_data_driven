@@ -6,13 +6,15 @@ import csv
 from pathlib import Path
 
 import matplotlib as mpl
+
+mpl.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
-ANALYSIS_DIR = PROJECT_DIR / "analysis/per_snapshot_r2_time_series"
-FK_MLE_DIR = PROJECT_DIR / "analysis/fk_mle"
+ANALYSIS_DIR = PROJECT_DIR / "analysis/time_series_r2_fk_submesofluxnet"
+FK_R2_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20/final_model_analysis_test"
 
 PALETTE = {
     "fluxnet": "#1F5A85",
@@ -30,31 +32,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fluxnet-r2",
         type=Path,
-        default=PROJECT_DIR / "outputs_no_shuffle_overfitting_test/test_r2_series.csv",
-        help="SubmesoFluxNet R2 CSV from evaluate.py.",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_r2_series.csv",
+        help="Final SubmesoFluxNet R2 CSV from model_analysis evaluation.",
     )
     parser.add_argument(
         "--fk-r2",
         type=Path,
-        default=FK_MLE_DIR / "fk_test_Ce2p13062237_r2_series.csv",
-        help="Tuned FK R2 CSV.",
+        default=FK_R2_DIR / "fk_r2_series.csv",
+        help="FK R2 CSV regenerated on the final model_analysis test split.",
     )
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=ANALYSIS_DIR / "fk_vs_submesofluxnet_per_snapshot_r2",
+        default=ANALYSIS_DIR / "fk_vs_submesofluxnet_time_series_r2",
     )
     parser.add_argument(
         "--summary-output",
         type=Path,
-        default=ANALYSIS_DIR / "fk_vs_submesofluxnet_per_snapshot_r2_summary.txt",
+        default=ANALYSIS_DIR / "fk_vs_submesofluxnet_time_series_r2_summary.txt",
     )
     parser.add_argument(
         "--stats-csv",
         type=Path,
-        default=ANALYSIS_DIR / "fk_vs_submesofluxnet_per_snapshot_r2_stats.csv",
+        default=ANALYSIS_DIR / "fk_vs_submesofluxnet_time_series_r2_stats.csv",
     )
     parser.add_argument("--rolling-window", type=int, default=81)
+    parser.add_argument("--allow-intersection", action="store_true", help="Allow plotting only the sample_index intersection if the two CSV files do not match exactly.")
     parser.add_argument("--fk-display-label", default="MLE parameterization", help="Display label for the FK/MLE baseline in plots and summaries.")
     return parser.parse_args()
 
@@ -111,15 +114,32 @@ def align_series(
     fluxnet_r2: np.ndarray,
     fk_sample: np.ndarray,
     fk_r2: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    flux_lookup = {int(s): n for n, s in enumerate(fluxnet_sample)}
-    fk_lookup = {int(s): n for n, s in enumerate(fk_sample)}
-    common = np.asarray(sorted(set(flux_lookup).intersection(fk_lookup)), dtype=np.int64)
+    allow_intersection: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, bool]:
+    if fluxnet_sample.shape == fk_sample.shape and np.array_equal(fluxnet_sample, fk_sample):
+        return fluxnet_sample, fluxnet_r2, fk_r2, False
+
+    flux_set = set(map(int, fluxnet_sample))
+    fk_set = set(map(int, fk_sample))
+    common = np.asarray(sorted(flux_set.intersection(fk_set)), dtype=np.int64)
+    missing_fk = sorted(flux_set.difference(fk_set))
+    missing_flux = sorted(fk_set.difference(flux_set))
+    message = (
+        "FK and SubmesoFluxNet sample_index values do not match exactly. "
+        f"SubmesoFluxNet rows={fluxnet_sample.size}, FK rows={fk_sample.size}, common={common.size}, "
+        f"first missing from FK={missing_fk[:5]}, first missing from SubmesoFluxNet={missing_flux[:5]}."
+    )
+    if not allow_intersection:
+        raise ValueError(message + " Rerun FK on the final split or pass --allow-intersection for a partial diagnostic plot.")
     if common.size == 0:
         raise ValueError("No overlapping sample_index values between FK and SubmesoFluxNet R2 CSV files.")
+
+    flux_lookup = {int(s): n for n, s in enumerate(fluxnet_sample)}
+    fk_lookup = {int(s): n for n, s in enumerate(fk_sample)}
     flux = np.asarray([fluxnet_r2[flux_lookup[int(s)]] for s in common], dtype=np.float64)
     fk = np.asarray([fk_r2[fk_lookup[int(s)]] for s in common], dtype=np.float64)
-    return common, flux, fk
+    print(message, flush=True)
+    return common, flux, fk, True
 
 
 def rolling_median(values: np.ndarray, window: int) -> np.ndarray:
@@ -174,12 +194,17 @@ def write_summary(
     flux_summary: dict[str, float | int],
     fk_summary: dict[str, float | int],
     fk_label: str,
+    used_intersection: bool,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
         handle.write(f"{fk_label} versus SubmesoFluxNet per-snapshot R2 comparison\n")
-        handle.write(f"comparison_scope: sample_index intersection of {fk_label} and SubmesoFluxNet R2 files\n")
-        handle.write(f"note: SubmesoFluxNet is restricted to the same {fk_label}-available subset before statistics are computed\n")
+        if used_intersection:
+            handle.write(f"comparison_scope: sample_index intersection of {fk_label} and SubmesoFluxNet R2 files\n")
+            handle.write(f"note: partial diagnostic; one input did not contain the complete final test split\n")
+        else:
+            handle.write("comparison_scope: exact final model_analysis raw-time-block test split\n")
+            handle.write("note: FK and SubmesoFluxNet sample_index values matched exactly before statistics were computed\n")
         handle.write(f"sample_index_range: {int(sample.min())}-{int(sample.max())}\n")
         handle.write(f"n_common_snapshots: {sample.size}\n")
         for label, vals in (("SubmesoFluxNet", flux_summary), (fk_label, fk_summary)):
@@ -236,8 +261,8 @@ def draw_figure(
     ymin = min(float(np.nanmin(fluxnet_r2)), float(np.nanmin(fk_r2))) - 0.04
     ymax = min(1.0, max(float(np.nanmax(fluxnet_r2)), float(np.nanmax(fk_r2))) + 0.04)
     ax_ts.set_ylim(ymin, ymax)
-    ax_ts.set_xlabel("Held-out test sample number")
-    ax_ts.set_ylabel(r"Snapshot $R^2$")
+    ax_ts.set_xlabel("Held-out test sample")
+    ax_ts.set_ylabel(r"Snapshot-level $R^2$")
     ax_ts.set_title(fr"MLE parameterization and SubmesoFluxNet test $R^2$", fontsize=7.5, pad=4)
     ax_ts.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.4, alpha=0.5)
     ax_ts.legend(loc="lower left", fontsize=6.4, handlelength=1.5)
@@ -252,7 +277,7 @@ def draw_figure(
     ax_hist.axhline(float(flux_summary["mean"]), color=PALETTE["fluxnet"], linewidth=0.8)
     ax_hist.axhline(float(fk_summary["mean"]), color=PALETTE["fk"], linewidth=0.8)
     ax_hist.set_ylim(ax_ts.get_ylim())
-    ax_hist.set_xlabel("Snapshots")
+    ax_hist.set_xlabel("Samples")
     ax_hist.set_title("Distribution", fontsize=7.5, pad=4)
     ax_hist.tick_params(axis="y", labelleft=False)
     ax_hist.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.35, alpha=0.42)
@@ -270,7 +295,7 @@ def main() -> None:
     args = parse_args()
     flux_sample, flux_r2 = read_r2_csv(args.fluxnet_r2)
     fk_sample, fk_r2 = read_r2_csv(args.fk_r2)
-    sample, flux_aligned, fk_aligned = align_series(flux_sample, flux_r2, fk_sample, fk_r2)
+    sample, flux_aligned, fk_aligned, used_intersection = align_series(flux_sample, flux_r2, fk_sample, fk_r2, args.allow_intersection)
     flux_summary = summary(flux_aligned)
     fk_summary = summary(fk_aligned)
 
@@ -285,7 +310,7 @@ def main() -> None:
         args.fk_display_label,
     )
     write_stats(args.stats_csv, flux_summary, fk_summary, args.fk_display_label)
-    write_summary(args.summary_output, sample, flux_summary, fk_summary, args.fk_display_label)
+    write_summary(args.summary_output, sample, flux_summary, fk_summary, args.fk_display_label, used_intersection)
 
     print(f"Saved {args.output_prefix}.png", flush=True)
     print(f"Saved {args.stats_csv}", flush=True)

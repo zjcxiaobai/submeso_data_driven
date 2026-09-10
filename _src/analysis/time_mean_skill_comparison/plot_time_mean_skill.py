@@ -6,6 +6,8 @@ import csv
 from pathlib import Path
 
 import matplotlib as mpl
+
+mpl.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -29,12 +31,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fluxnet-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz",
     )
     parser.add_argument(
         "--fk-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_prediction.npz",
+        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/final_model_analysis_test/fk_prediction_physical.npz",
     )
     parser.add_argument("--output-prefix", type=Path, default=HERE / "time_mean_skill_comparison")
     parser.add_argument("--csv-output", type=Path, default=HERE / "time_mean_skill_comparison.csv")
@@ -115,29 +117,16 @@ def align_to_fluxnet(
     fk_prediction: np.ndarray,
     fk_time_index: np.ndarray | None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
-    fk_lookup = {int(sample): pos for pos, sample in enumerate(fk_sample)}
-    fk_positions: list[int] = []
-    flux_positions: list[int] = []
-    for flux_pos, sample in enumerate(flux_sample):
-        fk_pos = fk_lookup.get(int(sample))
-        if fk_pos is not None:
-            flux_positions.append(flux_pos)
-            fk_positions.append(fk_pos)
-    if not flux_positions:
-        raise ValueError("No overlapping sample_index values between SubmesoFluxNet and FK predictions.")
-
-    flux_pos_array = np.asarray(flux_positions, dtype=np.int64)
-    fk_pos_array = np.asarray(fk_positions, dtype=np.int64)
-    order = np.argsort(flux_sample[flux_pos_array])
-    flux_pos_array = flux_pos_array[order]
-    fk_pos_array = fk_pos_array[order]
-    aligned_time = fk_time_index[fk_pos_array] if fk_time_index is not None else None
-    return (
-        flux_prediction[flux_pos_array],
-        target[flux_pos_array],
-        fk_prediction[fk_pos_array],
-        aligned_time,
-    )
+    if flux_sample.shape != fk_sample.shape or not np.array_equal(flux_sample, fk_sample):
+        flux_set = set(map(int, flux_sample))
+        fk_set = set(map(int, fk_sample))
+        raise ValueError(
+            "SubmesoFluxNet and MLE sample_index values do not match exactly: "
+            f"fluxnet_rows={flux_sample.size}, mle_rows={fk_sample.size}, common={len(flux_set & fk_set)}, "
+            f"first_missing_from_mle={sorted(flux_set - fk_set)[:5]}, "
+            f"first_missing_from_fluxnet={sorted(fk_set - flux_set)[:5]}"
+        )
+    return flux_prediction, target, fk_prediction, fk_time_index
 
 
 def block_average(values: np.ndarray, window: int) -> np.ndarray:
@@ -287,15 +276,15 @@ def write_summary(
             handle.write(f"time_index_max_spacing: {int(np.max(diffs))}\n")
         handle.write(f"best_submesofluxnet_window: {best_flux['window_snapshots']}\n")
         handle.write(f"best_submesofluxnet_r2: {float(best_flux['submesofluxnet_r2']):.10g}\n")
-        handle.write(f"best_fk_window: {best_fk['window_snapshots']}\n")
-        handle.write(f"best_fk_r2: {float(best_fk['fk_r2']):.10g}\n")
+        handle.write(f"best_mle_window: {best_fk['window_snapshots']}\n")
+        handle.write(f"best_mle_r2: {float(best_fk['fk_r2']):.10g}\n")
         for mark in (30, 90, 365):
             match = next((row for row in rows if int(row["window_snapshots"]) == mark), None)
             if match is not None:
                 handle.write(f"\nwindow_{mark}\n")
                 handle.write(f"n_blocks: {match['n_blocks']}\n")
                 handle.write(f"submesofluxnet_r2: {float(match['submesofluxnet_r2']):.10g}\n")
-                handle.write(f"fk_r2: {float(match['fk_r2']):.10g}\n")
+                handle.write(f"mle_r2: {float(match['fk_r2']):.10g}\n")
 
 
 def main() -> None:

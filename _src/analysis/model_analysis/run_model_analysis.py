@@ -349,7 +349,7 @@ def evaluate_metrics(model, loader, loss_fn, device):
     }
 
 
-def train_epoch(model, loader, optimizer, loss_fn, device, *, smooth_weight: float, corr_weight: float):
+def train_epoch(model, loader, optimizer, loss_fn, device, *, smooth_weight: float, corr_weight: float, clip_norm: float = 0.0):
     model.train()
     totals = torch.zeros(5, dtype=torch.float64, device=device)
     for x, y in loader:
@@ -362,6 +362,8 @@ def train_epoch(model, loader, optimizer, loss_fn, device, *, smooth_weight: flo
         reg_loss = latent_regularization(features, smooth_weight=smooth_weight, corr_weight=corr_weight)
         loss = pred_loss + reg_loss
         loss.backward()
+        if clip_norm > 0.0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_norm)
         optimizer.step()
         batch = x.shape[0]
         totals[0] += loss.detach().double() * batch
@@ -388,6 +390,21 @@ def append_csv(path: Path, row: dict) -> None:
         writer.writerow(row)
 
 
+def build_scheduler(train_cfg: dict, optimizer):
+    name = str(train_cfg.get("lr_scheduler", "none")).lower()
+    if name == "none":
+        return None
+    if name == "plateau":
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            factor=float(train_cfg.get("scheduler_factor", 0.5)),
+            patience=int(train_cfg.get("scheduler_patience", 10)),
+            min_lr=float(train_cfg.get("scheduler_min_lr", 1.0e-5)),
+        )
+    raise ValueError(f"Unknown scheduler: {name}")
+
+
 def train(config: dict) -> None:
     root = project_dir()
     seed_everything(int(config.get("seed", 42)))
@@ -401,6 +418,7 @@ def train(config: dict) -> None:
         lr=float(train_cfg.get("lr", 3.0e-4)),
         weight_decay=float(train_cfg.get("weight_decay", 0.0)),
     )
+    scheduler = build_scheduler(train_cfg, optimizer)
     checkpoint = resolve(root, train_cfg["checkpoint"])
     history_csv = resolve(root, train_cfg["history_csv"])
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
@@ -418,11 +436,13 @@ def train(config: dict) -> None:
             device,
             smooth_weight=smooth_weight,
             corr_weight=corr_weight,
+            clip_norm=float(train_cfg.get("gradient_clip_norm", 0.0)),
         )
         train_eval = evaluate_metrics(model, train_loader, loss_fn, device)
         val_stats = evaluate_metrics(model, val_loader, loss_fn, device)
         row = {
             "epoch": epoch,
+            "lr": float(optimizer.param_groups[0]["lr"]),
             "train_loss": train_stats["loss"],
             "train_pred_loss": train_stats["pred_loss"],
             "train_mse": train_eval["mse"],
@@ -448,6 +468,8 @@ def train(config: dict) -> None:
             if stale >= patience:
                 print(f"Early stopping at epoch {epoch}; best_val={best_val:.6g}", flush=True)
                 break
+        if scheduler is not None:
+            scheduler.step(val_stats["loss"])
 
 
 def denormalize_y(values: np.ndarray, stats: NormStats) -> np.ndarray:

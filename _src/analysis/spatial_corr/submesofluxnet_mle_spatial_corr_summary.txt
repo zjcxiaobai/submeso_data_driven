@@ -1,27 +1,27 @@
 SubmesoFluxNet versus MLE parameterization spatial correlation
-comparison_scope: sample_index intersection of MLE parameterization and SubmesoFluxNet spatial-correlation CSVs
-note: SubmesoFluxNet is restricted to the same MLE parameterization-available subset before statistics are computed
-sample_index_range: 13-11455
-n_common_snapshots: 1147
+comparison_scope: exact final model_analysis raw-time-block test split
+note: SubmesoFluxNet and MLE sample_index values matched exactly before statistics were computed
+sample_index_range: 10335-11477
+n_common_snapshots: 1143
 
 SubmesoFluxNet
-count: 1147
-finite_count: 1147
-mean: 0.9255897826
-median: 0.9302667856
-std: 0.03533741411
-min: 0.7551487017
-max: 0.9869194388
-p05: 0.8547290779
-p95: 0.972119107
+count: 1143
+finite_count: 1143
+mean: 0.8398853457
+median: 0.8430854055
+std: 0.04678119693
+min: 0.5881939897
+max: 0.9478477859
+p05: 0.7584093505
+p95: 0.9075394071
 
 MLE parameterization
-count: 1147
-finite_count: 1147
-mean: 0.4665638728
-median: 0.4690851927
-std: 0.09868027514
-min: 0.1225354938
-max: 0.7184447387
-p05: 0.3004624103
-p95: 0.6230823503
+count: 1143
+finite_count: 1143
+mean: 0.448194707
+median: 0.4526760813
+std: 0.09745273362
+min: 0.1021895584
+max: 0.6962615776
+p05: 0.2828157427
+p95: 0.6111278424

@@ -1,45 +1,45 @@
 Non-local selected-year truth/prediction time-mean maps
 time_window: evaluation_subdomain_best_1_year_window.csv
 n_window_snapshots: 730
-start_time_index: 18759024
-end_time_index: 20018736
+start_time_index: 18938736
+end_time_index: 20198448
 
 Best snapshot
-r2: 0.7525731399
+r2: 0.7457814157
 n_snapshots: 1
-start_sample_index: 7100
-end_sample_index: 7100
-start_time_index: 19142640
-end_time_index: 19142640
+start_sample_index: 7088
+end_sample_index: 7088
+start_time_index: 19121904
+end_time_index: 19121904
 
 Worst snapshot
-r2: 0.05466510403
+r2: 0.2695507162
 n_snapshots: 1
-start_sample_index: 6964
-end_sample_index: 6964
-start_time_index: 18907632
-end_time_index: 18907632
+start_sample_index: 7505
+end_sample_index: 7505
+start_time_index: 19842480
+end_time_index: 19842480
 
 Monthly mean
-r2: 0.795091976
+r2: 0.7899347124
 n_snapshots: 60
-start_sample_index: 7178
-end_sample_index: 7237
-start_time_index: 19277424
-end_time_index: 19379376
+start_sample_index: 7162
+end_sample_index: 7221
+start_time_index: 19249776
+end_time_index: 19351728
 
 Seasonal mean
-r2: 0.8295717677
+r2: 0.803927253
 n_snapshots: 180
-start_sample_index: 7058
-end_sample_index: 7237
-start_time_index: 19070064
-end_time_index: 19379376
+start_sample_index: 6982
+end_sample_index: 7161
+start_time_index: 18938736
+end_time_index: 19248048
 
 Annual mean
-r2: 0.8022610092
+r2: 0.7841375216
 n_snapshots: 730
-start_sample_index: 6878
-end_sample_index: 7607
-start_time_index: 18759024
-end_time_index: 20018736
+start_sample_index: 6982
+end_sample_index: 7711
+start_time_index: 18938736
+end_time_index: 20198448

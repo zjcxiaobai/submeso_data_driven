@@ -1,0 +1,16 @@
+Tuned-Ce FK MLD-rho final model_analysis raw-time-block test R2 summary
+C_e: 2.25895966
+sample_index_range: 10335-11477
+time_index_range: 24732720-26706096
+count: 1143
+finite_count: 1143
+mean: 0.1725590913
+median: 0.1791764374
+std: 0.1042521446
+min: -0.3994947153
+max: 0.4549524272
+p05: 0.00974381684
+p25: 0.1160142837
+p75: 0.2368408045
+p95: 0.337015895
+overall_r2: 0.1714142765

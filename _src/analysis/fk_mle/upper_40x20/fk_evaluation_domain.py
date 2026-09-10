@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Compute tuned-Ce FK heat flux for the MLD-rho 80/10/10 shuffle test set.
+"""Compute tuned-Ce FK heat flux for the final model_analysis test split.
 
-This combined script replaces the old split between calculate_test_* and
-calculate_shuffle_all_* for the new experiment. It defaults to the saved
-SubmesoFluxNet 80/10/10 test predictions, computes FK on the same sample order,
-saves physical-unit FK predictions, and plots/writes per-snapshot R2.
+The script reads sample indices from the final temporal-bottleneck prediction
+file, computes FK on the same held-out raw-time-block samples, saves physical-unit
+FK predictions, and writes per-snapshot R2.
 
 Update --c-e after running tune_ce_random_search.py on the matching training set.
 The FK calculation is resumable via the full-grid progress NPZ; rerun the same
@@ -28,7 +27,7 @@ import xarray as xr
 PROJECT_DIR = Path(__file__).resolve().parents[3]
 REPO_ROOT = PROJECT_DIR.parent
 PER_SNAPSHOT_DIR = PROJECT_DIR / "analysis/per_snapshot_r2_time_series"
-OUT_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20/Ce_base_case_calculation"
+OUT_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20/final_model_analysis_test"
 
 if str(PER_SNAPSHOT_DIR) not in sys.path:
     sys.path.insert(0, str(PER_SNAPSHOT_DIR))
@@ -39,7 +38,7 @@ from fk_physics import compute_fk_submeso_heat_flux_one_time  # noqa: E402
 from src.utils import build_coarse_grid, read_mitgcm  # noqa: E402
 
 
-BEST_CE = 2.13062237  # Replace with the tuned value from this 80/10/10 training split.
+BEST_CE = 2.25895966  # Best value recorded in Ce_base_case_calculation/ce_random_search_summary.txt.
 
 
 PALETTE = {
@@ -56,7 +55,7 @@ PALETTE = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--c-e", type=float, default=BEST_CE)
-    parser.add_argument("--predictions", type=Path, default=PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz")
+    parser.add_argument("--predictions", type=Path, default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz")
     parser.add_argument("--time-source", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/time_index.npy")
     parser.add_argument(
         "--grid-run-dir",
@@ -68,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nc-dir", type=Path, default=Path("/scratch/jczhang/data_5km/save_coarse/13901616_nc"))
     parser.add_argument("--engine", default="h5netcdf", choices=("h5netcdf", "netcdf4", "scipy"))
     parser.add_argument("--crop", type=int, nargs=4, default=(92, 112, 12, 52), metavar=("J0", "J1", "I0", "I1"), help="Crop on the 120x60 FK grid matching upper40x20: 56x56 y=30:50, x=10:50.")
-    parser.add_argument("--lf-min", type=float, default=1000.0)
+    parser.add_argument("--lf-min", type=float, default=1374.0)
     parser.add_argument("--submeso-lmax", type=float, default=2751.0)
     parser.add_argument("--submeso-inv-tau", type=float, default=2.0e-6)
     parser.add_argument("--f0", type=float, default=-1.363e-4)
@@ -346,7 +345,7 @@ def write_stats(path: Path, summary: dict[str, float | int], overall: float) -> 
 def write_summary(path: Path, args: argparse.Namespace, sample_index: np.ndarray, time_index: np.ndarray, summary: dict[str, float | int], overall: float) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
-        handle.write("Tuned-Ce FK MLD-rho 80/10/10 shuffle test R2 summary\n")
+        handle.write("Tuned-Ce FK MLD-rho final model_analysis raw-time-block test R2 summary\n")
         handle.write(f"C_e: {args.c_e:.10g}\n")
         handle.write(f"sample_index_range: {int(sample_index.min())}-{int(sample_index.max())}\n")
         handle.write(f"time_index_range: {int(time_index.min())}-{int(time_index.max())}\n")
@@ -398,7 +397,7 @@ def plot_r2(args: argparse.Namespace) -> None:
     ax_ts.set_ylim(float(np.nanmin(r2)) - 0.04, min(1.0, float(np.nanmax(r2)) + 0.04))
     ax_ts.set_xlabel("Held-out test data index")
     ax_ts.set_ylabel(r"Per-snapshot $R^2$")
-    ax_ts.set_title(fr"FK MLD-rho test $R^2$, $C_e$={args.c_e:.4g}", fontsize=7.5, pad=4)
+    ax_ts.set_title(fr"FK final test $R^2$, $C_e$={args.c_e:.4g}", fontsize=7.5, pad=4)
     ax_ts.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.4, alpha=0.5)
     ax_ts.text(0.012, 0.96, fr"mean $R^2$={mean_r2:.3f}", transform=ax_ts.transAxes, ha="left", va="top", fontsize=6.5)
 
@@ -427,6 +426,7 @@ def main() -> None:
     print(f"Test snapshots: {sample_index.size}", flush=True)
     print(f"Test time range: {int(target_time.min())} ... {int(target_time.max())}", flush=True)
     print(f"Using tuned C_e={args.c_e}", flush=True)
+    print(f"Using tuned lf_min={args.lf_min}", flush=True)
 
     if args.calc_only and args.plot_only:
         raise ValueError("Use only one of --calc-only or --plot-only, not both.")

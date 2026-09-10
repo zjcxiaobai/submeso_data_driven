@@ -1,0 +1,29 @@
+{
+  "selection": "best_test_sample_by_r2",
+  "sample_index": 10384,
+  "test_position": 49,
+  "time_index": 24817392,
+  "selected_r2": 0.9020434468984604,
+  "x_path": "/scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/data/X.npy",
+  "predictions": "/scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/outputs_final/test_predictions_denorm.npz",
+  "features": [
+    "U",
+    "V",
+    "W",
+    "zeta",
+    "strain",
+    "T",
+    "rho",
+    "kpphbl"
+  ],
+  "shape_nyx": [
+    1,
+    20,
+    40
+  ],
+  "variable_count": 65,
+  "dx_m": 50000.0,
+  "dy_m": 50000.0,
+  "periodic_x": true,
+  "periodic_y": false
+}

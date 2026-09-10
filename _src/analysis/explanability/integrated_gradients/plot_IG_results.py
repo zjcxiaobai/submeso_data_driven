@@ -138,7 +138,7 @@ def lag_plot(lag_feature, offsets, names, output):
     axes[0].set_xlabel("Temporal offset")
     axes[0].set_ylabel("Fraction of total |IG|")
     axes[0].set_title("Total attribution by lag", fontsize=8)
-    axes[0].set_ylim(0, 0.2)
+    axes[0].set_ylim(0, max(0.05, float(np.nanmax(total_fraction)) * 1.15))
     axes[0].grid(axis="y", color="#D0D0D0", linewidth=0.4)
     mesh = axes[1].imshow(
         normalized, origin="lower", aspect="auto", cmap="Blues",
@@ -155,9 +155,8 @@ def lag_plot(lag_feature, offsets, names, output):
     plt.close(fig)
 
 
-def main() -> None:
-    args = parse_args()
-    with np.load(args.input, allow_pickle=True) as data:
+def replot(input_path: Path, output_dir: Path) -> None:
+    with np.load(input_path, allow_pickle=True) as data:
         names = [str(value) for value in data["feature_names"]]
         geographic = np.asarray(data["geographic_feature_attribution"], dtype=float)
         centered = np.asarray(data["target_centered_feature_attribution"], dtype=float)
@@ -175,9 +174,9 @@ def main() -> None:
     centered = centered[order]
     signed = signed[order]
     lag_feature = lag_feature[:, order]
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    prefix = args.output_dir / "top10_gridcell_ig"
-    with (args.output_dir / "top10_gridcell_ig_geographical_feature_rank.csv").open("w") as handle:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    prefix = output_dir / "top10_gridcell_ig"
+    with (output_dir / "top10_gridcell_ig_geographical_feature_rank.csv").open("w") as handle:
         handle.write("rank,feature_index,feature_name,total_abs_ig,fraction_abs_ig\n")
         total_score = float(np.nansum(scores))
         for rank, feature_index in enumerate(order, start=1):
@@ -202,7 +201,12 @@ def main() -> None:
         lag_feature, offsets, names,
         prefix.with_name(prefix.name + "_time_lag_sensitivity.png"),
     )
-    print(f"Replotted compact PNG figures under {args.output_dir}")
+    print(f"Replotted compact PNG figures under {output_dir}")
+
+
+def main() -> None:
+    args = parse_args()
+    replot(args.input, args.output_dir)
 
 
 if __name__ == "__main__":

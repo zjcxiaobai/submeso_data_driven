@@ -38,27 +38,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--predictions",
         type=Path,
-        default=PROJECT_DIR / "outputs_no_shuffle_overfitting_test/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz",
         help="NPZ produced by evaluate.py with prediction, target, and sample_index arrays.",
     )
     parser.add_argument(
         "--r2-series",
         type=Path,
-        default=PROJECT_DIR / "outputs_no_shuffle_overfitting_test/test_r2_series.csv",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_r2_series.csv",
         help="CSV produced by evaluate.py with per-snapshot R2 values.",
     )
     parser.add_argument(
         "--output-prefix",
         type=Path,
         default=PROJECT_DIR
-        / "analysis/per_snapshot_r2_time_series/no_shuffle_overfitting_test_best_worst_maps",
+        / "analysis/time_series_r2_fk_submesofluxnet/submesofluxnet_best_worst_maps",
         help="Output prefix without extension.",
     )
     parser.add_argument(
         "--summary-output",
         type=Path,
         default=PROJECT_DIR
-        / "analysis/per_snapshot_r2_time_series/no_shuffle_overfitting_test_best_worst_maps_summary.txt",
+        / "analysis/time_series_r2_fk_submesofluxnet/submesofluxnet_best_worst_maps_summary.txt",
     )
     parser.add_argument(
         "--percentile",

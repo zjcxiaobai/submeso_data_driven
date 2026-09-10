@@ -11,8 +11,8 @@ import numpy as np
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
-ANALYSIS_DIR = PROJECT_DIR / "analysis/per_snapshot_r2_time_series"
-DEFAULT_R2 = PROJECT_DIR / "analysis/shuffle_upper40x20_mld_rho/outputs/test_r2_series.csv"
+ANALYSIS_DIR = PROJECT_DIR / "analysis/time_series_r2_fk_submesofluxnet"
+DEFAULT_R2 = PROJECT_DIR / "analysis/model_analysis/outputs_final/test_r2_series.csv"
 
 PALETTE = {
     "main": "#1F5A85",
@@ -27,23 +27,23 @@ PALETTE = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Plot per-snapshot test R2 for the shuffle-all upper40x20 rho model."
+        description="Plot per-snapshot test R2 for the final model_analysis temporal bottleneck model."
     )
     parser.add_argument("--r2-series", type=Path, default=DEFAULT_R2)
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=ANALYSIS_DIR / "shuffle_all_mld_rho_per_snapshot_r2",
+        default=ANALYSIS_DIR / "test_r2_time_series",
     )
     parser.add_argument(
         "--summary-output",
         type=Path,
-        default=ANALYSIS_DIR / "shuffle_all_mld_rho_per_snapshot_r2_summary.txt",
+        default=ANALYSIS_DIR / "test_r2_time_series_summary.txt",
     )
     parser.add_argument(
         "--stats-csv",
         type=Path,
-        default=ANALYSIS_DIR / "shuffle_all_mld_rho_per_snapshot_r2_stats.csv",
+        default=ANALYSIS_DIR / "test_r2_time_series_stats.csv",
     )
     parser.add_argument("--rolling-window", type=int, default=81)
     parser.add_argument("--label", default="SubmesoFluxNet")
@@ -175,7 +175,7 @@ def write_summary(
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
         handle.write(f"{label} per-snapshot test R2\n")
-        handle.write("source_model: shuffle_all upper_40x20, rho replaces speed\n")
+        handle.write("source_model: final model_analysis temporal bottleneck, upper_40x20, rho replaces speed\n")
         handle.write(f"sample_index_range: {sample_min}-{sample_max}\n")
         for key, value in summary.items():
             if isinstance(value, int):
@@ -224,11 +224,11 @@ def draw_figure(
     ymax = min(1.0, float(np.nanmax(r2_sorted)) + 0.04)
     ax_ts.set_ylim(ymin, ymax)
     ax_ts.set_xlabel("Held-out sample index")
-    ax_ts.set_ylabel(r"Per-snapshot $R^2$")
-    ax_ts.set_title(r"Shuffle-all test $R^2$ with density input", fontsize=7.5, pad=4)
+    ax_ts.set_ylabel(r"Snapshot-level $R^2$")
+    ax_ts.set_title(r" SubmesoFluxNet Test $R^2$", fontsize=7.5, pad=4)
     ax_ts.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.4, alpha=0.5)
     stats_text = (
-        f"Mean R² = {float(summary['mean']):.3f}\n"
+        f"Mean snapshot R² = {float(summary['mean']):.3f}\n"
         f"SD = {float(summary['std']):.3f}\n"
         f"Min = {float(summary['min']):.3f}\n"
         f"Max = {float(summary['max']):.3f}"
@@ -257,7 +257,7 @@ def draw_figure(
     ax_hist.hist(finite, bins=bins, orientation="horizontal", color=PALETTE["main"], alpha=0.58)
     ax_hist.axhline(float(summary["mean"]), color=PALETTE["smooth"], linewidth=0.9)
     ax_hist.set_ylim(ax_ts.get_ylim())
-    ax_hist.set_xlabel("Snapshots")
+    ax_hist.set_xlabel("Samples")
     ax_hist.set_title("Distribution", fontsize=7.5, pad=4)
     ax_hist.tick_params(axis="y", labelleft=False)
     ax_hist.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.35, alpha=0.42)
@@ -282,9 +282,20 @@ def main() -> None:
     low_start, low_end, low_mean = lowest_window(sample_index, r2, args.rolling_window)
 
     draw_figure(sample_index, r2, smooth, summary, low_start, low_end, args.output_prefix, args.label)
+    write_stats_csv(args.stats_csv, summary, low_start, low_end, low_mean)
+    write_summary(
+        args.summary_output,
+        summary,
+        int(sample_index.min()),
+        int(sample_index.max()),
+        low_start,
+        low_end,
+        low_mean,
+        args.label,
+    )
 
     print(f"Saved {args.output_prefix.with_suffix('.png')}", flush=True)
-    print(f"Mean R2: {summary['mean']:.6f}", flush=True)
+    print(f"Mean snapshot R2: {summary['mean']:.6f}", flush=True)
     print(f"SD R2: {summary['std']:.6f}", flush=True)
     print(f"Min R2: {summary['min']:.6f}", flush=True)
     print(f"Max R2: {summary['max']:.6f}", flush=True)

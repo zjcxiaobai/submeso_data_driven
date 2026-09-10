@@ -7,17 +7,28 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from torch.utils.data import DataLoader, Subset
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from data_utils import build_dataloaders  # noqa: E402
-from models import build_model  # noqa: E402
-from utils import get_device, load_config, seed_everything  # noqa: E402
+from analysis.model_analysis.run_model_analysis import (  # noqa: E402
+    TemporalSequenceDataset,
+    build_model,
+    centers_in_block,
+    get_device,
+    load_config,
+    load_stats,
+    split_raw_blocks,
+    seed_everything,
+)
 
 plt.rcParams["font.family"] = "sans-serif"
 plt.rcParams["font.sans-serif"] = ["Arial", "DejaVu Sans", "Liberation Sans"]
@@ -33,7 +44,7 @@ PALETTE = {
 }
 
 CASES = {
-    "model_analysis": PROJECT_DIR / "analysis/feature_sensitivity/config_model_analysis.yaml",
+    "model_analysis": PROJECT_DIR / "analysis/model_analysis/config.yaml",
 }
 
 DEFAULT_FEATURE_NAMES = [
@@ -134,37 +145,33 @@ def sample_r2_torch(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
 
 def replace_feature_with_training_mean(
     x: torch.Tensor,
-    channel_indices: list[int],
+    feature_index: int,
     *,
     stats,
     normalize_x: bool,
     device: torch.device,
 ) -> torch.Tensor:
     x_ablated = x.clone()
+    if x_ablated.ndim != 5:
+        raise ValueError(f"Expected separated-time input (B,T,C,H,W), got {tuple(x_ablated.shape)}")
     if normalize_x:
-        replacement = torch.zeros((len(channel_indices), 1, 1), dtype=x.dtype, device=device)
+        replacement = torch.zeros((1, 1, 1), dtype=x.dtype, device=device)
     else:
-        replacement = torch.as_tensor(stats.x_mean[channel_indices], dtype=x.dtype, device=device)
-    x_ablated[:, channel_indices, :, :] = replacement
+        replacement = torch.as_tensor(stats.x_mean[feature_index], dtype=x.dtype, device=device)
+    x_ablated[:, :, feature_index, :, :] = replacement
     return x_ablated
 
 
-def feature_channel_groups(config: dict, feature_names: list[str] | None) -> tuple[list[str], list[list[int]]]:
-    n_model_channels = int(config["model"]["in_channels"])
-    frame_channels = int(config["model"].get("frame_channels", n_model_channels))
-    if n_model_channels % frame_channels != 0:
-        raise ValueError(f"in_channels={n_model_channels} is not divisible by frame_channels={frame_channels}")
+def feature_channel_groups(config: dict, feature_names: list[str] | None) -> tuple[list[str], list[int]]:
+    frame_channels = int(config["model"].get("input_channels", config["model"].get("frame_channels", 0)))
+    if frame_channels <= 0:
+        raise ValueError("Could not infer per-frame input feature count from model.input_channels")
 
     names = feature_names or DEFAULT_FEATURE_NAMES[:frame_channels]
     if len(names) != frame_channels:
         raise ValueError(f"Expected {frame_channels} feature names, got {len(names)}")
 
-    n_frames = n_model_channels // frame_channels
-    channel_groups = [
-        [frame * frame_channels + feature_index for frame in range(n_frames)]
-        for feature_index in range(frame_channels)
-    ]
-    return names, channel_groups
+    return names, list(range(frame_channels))
 
 
 def run_case(
@@ -178,18 +185,42 @@ def run_case(
     config = load_config(config_path)
     seed_everything(int(config.get("seed", 42)))
     device = get_device(device_override or config.get("device", "auto"))
-    checkpoint_path = Path(config["train"]["best_checkpoint"])
+    checkpoint_path = PROJECT_DIR / "analysis/model_analysis/outputs_final/temporal_bottleneck.pt"
+    data_cfg = config["data"]
+    output_cfg = config.get("output", {})
     if batch_size is not None:
-        config["data"]["batch_size"] = batch_size
-    config["data"]["num_workers"] = 0
-    if get_device(device_override or config.get("device", "auto")).type == "cpu":
-        config["data"]["pin_memory"] = False
+        data_cfg["batch_size"] = batch_size
+    data_cfg["num_workers"] = 0
+    if device.type == "cpu":
+        data_cfg["pin_memory"] = False
 
-    _, _, test_loader, stats = build_dataloaders(config, PROJECT_DIR, int(config.get("seed", 42)))
+    temporal_offsets = [int(v) for v in data_cfg.get("temporal_offsets", [0])]
+    x_path = PROJECT_DIR / data_cfg["x_path"]
+    y_path = PROJECT_DIR / data_cfg["y_path"]
+    stats_path = PROJECT_DIR / output_cfg.get("stats", "analysis/model_analysis/outputs_final/norm_stats.npz")
+    stats = load_stats(stats_path)
+    n_samples = np.load(x_path, mmap_mode="r").shape[0]
+    _, _, test_block = split_raw_blocks(n_samples, data_cfg["split"])
+    test_idx = centers_in_block(test_block, temporal_offsets)
+    dataset = TemporalSequenceDataset(
+        x_path,
+        y_path,
+        temporal_offsets=temporal_offsets,
+        stats=stats,
+        normalize_x=bool(data_cfg.get("normalize_x", True)),
+        normalize_y=bool(data_cfg.get("normalize_y", True)),
+    )
+    test_loader = DataLoader(
+        Subset(dataset, test_idx),
+        batch_size=int(data_cfg.get("batch_size", 64)),
+        shuffle=False,
+        num_workers=0,
+        pin_memory=device.type == "cuda",
+    )
     names, channel_groups = feature_channel_groups(config, feature_names)
     n_features = len(channel_groups)
 
-    model = build_model(config["model"]).to(device)
+    model = build_model(config).to(device)
     print(f"Loading trained checkpoint for {format_case_name(case)}: {checkpoint_path}", flush=True)
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state"])
@@ -219,10 +250,10 @@ def run_case(
             baseline_pred = model(x)
             baseline_batches.append(sample_r2_torch(baseline_pred, y).cpu().numpy())
 
-            for feature_index, channel_indices in enumerate(channel_groups):
+            for feature_index, feature_channel in enumerate(channel_groups):
                 x_ablated = replace_feature_with_training_mean(
                     x,
-                    channel_indices,
+                    feature_channel,
                     stats=stats,
                     normalize_x=normalize_x,
                     device=device,
@@ -317,7 +348,7 @@ def plot_case_timeseries(result: CaseResult, output_dir: Path) -> None:
     for ax in axes[:, 0]:
         ax.set_ylabel(r"$R^2$")
     axes_flat[0].legend(loc="best", fontsize=6, handlelength=2.0)
-    fig.suptitle(f"{format_case_name(result.case)} feature ablation R2 time series", fontsize=9)
+    fig.suptitle(f"{format_case_name(result.case)} separated-time feature ablation R2 time series", fontsize=9)
     save_figure(fig, output_dir / f"{result.case}_feature_ablation_timeseries")
 
 

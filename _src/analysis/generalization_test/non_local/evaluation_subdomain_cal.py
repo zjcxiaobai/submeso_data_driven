@@ -16,16 +16,16 @@ PROJECT_DIR = Path(__file__).resolve().parents[3]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from data_utils.npy_dataset import (  # noqa: E402
+from data_utils.npy_dataset import parse_temporal_offsets, valid_center_indices  # noqa: E402
+from analysis.model_analysis.run_model_analysis import (  # noqa: E402
     NormStats,
-    NpyRegressionDataset,
-    load_or_compute_stats,
-    parse_temporal_offsets,
-    split_indices,
-    valid_center_indices,
+    TemporalSequenceDataset,
+    build_model,
+    get_device,
+    load_config,
+    load_stats,
+    seed_everything,
 )
-from models import build_model  # noqa: E402
-from utils import get_device, load_config, seed_everything  # noqa: E402
 
 
 HERE = Path(__file__).resolve().parent
@@ -38,20 +38,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         type=Path,
-        default=PROJECT_DIR / "analysis/model_analysis/outputs/config.yaml",
+        default=PROJECT_DIR / "analysis/model_analysis/config.yaml",
     )
     parser.add_argument(
         "--checkpoint",
         type=Path,
         default=None,
-        help="Checkpoint path. Default: analysis/model_analysis/outputs/checkpoints/best.pt.",
+        help="Checkpoint path. Default: analysis/model_analysis/outputs_final/temporal_bottleneck.pt.",
     )
     parser.add_argument("--eval-x", type=Path, default=HERE / "evaluation_subdomain/X.npy")
     parser.add_argument("--eval-y", type=Path, default=HERE / "evaluation_subdomain/y.npy")
     parser.add_argument("--eval-time-index", type=Path, default=HERE / "evaluation_subdomain/time_index.npy")
     parser.add_argument("--stats-x", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/X.npy")
     parser.add_argument("--stats-y", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/y.npy")
-    parser.add_argument("--stats-path", type=Path, default=PROJECT_DIR / "analysis/model_analysis/outputs/norm_stats.npz")
+    parser.add_argument("--stats-path", type=Path, default=PROJECT_DIR / "analysis/model_analysis/outputs_final/norm_stats.npz")
     parser.add_argument(
         "--output-prefix",
         type=Path,
@@ -61,18 +61,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--num-workers", type=int, default=0)
     return parser.parse_args()
-
-
-def load_stats(path: Path) -> NormStats:
-    if not path.exists():
-        raise FileNotFoundError(f"Missing normalization stats: {path}")
-    with np.load(path) as data:
-        return NormStats(
-            x_mean=np.asarray(data["x_mean"], dtype=np.float32),
-            x_std=np.asarray(data["x_std"], dtype=np.float32),
-            y_mean=np.asarray(data["y_mean"], dtype=np.float32),
-            y_std=np.asarray(data["y_std"], dtype=np.float32),
-        )
 
 
 def denormalize_y(values: torch.Tensor, stats: NormStats, enabled: bool, device: torch.device) -> torch.Tensor:
@@ -113,26 +101,16 @@ def main() -> None:
     normalize_y = bool(data_cfg.get("normalize_y", True))
     temporal_offsets = parse_temporal_offsets(data_cfg)
 
-    stats_probe = np.load(args.stats_x, mmap_mode="r")
-    stats_centers = valid_center_indices(stats_probe.shape[0], temporal_offsets)
-    train_pos, _, _ = split_indices(stats_centers.shape[0], data_cfg["split"], seed)
-    stats_scope = str(data_cfg.get("stats_scope", "train")).lower()
-    stats_idx = stats_centers[train_pos] if stats_scope == "train" else stats_centers
-    stats = load_or_compute_stats(
-        args.stats_x,
-        args.stats_y,
-        stats_idx,
-        args.stats_path,
-        temporal_offsets=temporal_offsets,
-        stats_scope=stats_scope,
-    )
-    dataset = NpyRegressionDataset(
+    if not args.stats_path.exists():
+        raise FileNotFoundError(f"Missing normalization stats from final model_analysis run: {args.stats_path}")
+    stats = load_stats(args.stats_path)
+    dataset = TemporalSequenceDataset(
         args.eval_x,
         args.eval_y,
+        temporal_offsets=temporal_offsets,
         stats=stats,
         normalize_x=bool(data_cfg.get("normalize_x", True)),
         normalize_y=normalize_y,
-        temporal_offsets=temporal_offsets,
     )
     sample_indices = valid_center_indices(len(dataset), temporal_offsets)
     eval_time_index = None
@@ -149,8 +127,8 @@ def main() -> None:
         pin_memory=device.type == "cuda",
     )
 
-    checkpoint_path = args.checkpoint or (PROJECT_DIR / "analysis/model_analysis/outputs/checkpoints/best.pt")
-    model = build_model(config["model"]).to(device)
+    checkpoint_path = args.checkpoint or (PROJECT_DIR / "analysis/model_analysis/outputs_final/temporal_bottleneck.pt")
+    model = build_model(config).to(device)
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()

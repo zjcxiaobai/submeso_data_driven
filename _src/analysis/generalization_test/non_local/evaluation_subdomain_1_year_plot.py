@@ -393,7 +393,7 @@ def draw_figure(
     ax.tick_params(labelsize=7.2, length=2.5, width=0.7)
     ax.legend(
         loc="center",
-        bbox_to_anchor=(0.58, 0.18),
+        bbox_to_anchor=(0.43, 0.18),
         fontsize=6.8,
         handlelength=1.8,
         borderaxespad=0.0,

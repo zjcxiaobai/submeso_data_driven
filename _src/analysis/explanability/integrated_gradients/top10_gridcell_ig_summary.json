@@ -1,7 +1,7 @@
 {
   "selection": "temporally distributed snapshots from top predicted mean-absolute-flux decile",
   "flux_quantile": 0.1,
-  "flux_threshold": 5.82285675057769,
+  "flux_threshold": 3.98401573780179,
   "num_snapshots": 90,
   "targets_per_snapshot": [
     "strong_positive",
@@ -10,12 +10,21 @@
   ],
   "target_count": 270,
   "steps": 64,
+  "ig_batch_size": 16,
   "baseline": "zero",
+  "final_state_visible_lags": [
+    -5,
+    -4,
+    -3,
+    -2,
+    -1,
+    0
+  ],
   "dx_km": 50.0,
   "dy_km": 50.0,
   "periodic_x": true,
   "periodic_y": false,
-  "config": "/scratch/jczhang/submeso_data_driven/_src/analysis/explanability/integrated_gradients/config_model_analysis.yaml",
-  "checkpoint": "/scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/outputs/checkpoints/best.pt",
+  "config": "/scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/config.yaml",
+  "checkpoint": "/scratch/jczhang/submeso_data_driven/_src/analysis/model_analysis/outputs_final/temporal_bottleneck.pt",
   "output_prefix": "/scratch/jczhang/submeso_data_driven/_src/analysis/explanability/integrated_gradients/top10_gridcell_ig"
 }

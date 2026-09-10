@@ -5,6 +5,8 @@ import argparse
 from pathlib import Path
 
 import matplotlib as mpl
+
+mpl.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize, TwoSlopeNorm
@@ -24,12 +26,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fluxnet-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz",
     )
     parser.add_argument(
         "--fk-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_prediction.npz",
+        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/final_model_analysis_test/fk_prediction_physical.npz",
     )
     parser.add_argument("--window", type=int, default=365, help="Averaging window in model days/snapshots.")
     parser.add_argument("--block-index", type=int, default=0, help="Annual block to plot after trimming to full blocks.")
@@ -106,30 +108,16 @@ def align_to_fluxnet(
     fk_prediction: np.ndarray,
     fk_time_index: np.ndarray | None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
-    fk_lookup = {int(sample): pos for pos, sample in enumerate(fk_sample)}
-    fk_positions: list[int] = []
-    flux_positions: list[int] = []
-    for flux_pos, sample in enumerate(flux_sample):
-        fk_pos = fk_lookup.get(int(sample))
-        if fk_pos is not None:
-            flux_positions.append(flux_pos)
-            fk_positions.append(fk_pos)
-    if not flux_positions:
-        raise ValueError("No overlapping sample_index values between SubmesoFluxNet and FK predictions.")
-
-    flux_pos_array = np.asarray(flux_positions, dtype=np.int64)
-    fk_pos_array = np.asarray(fk_positions, dtype=np.int64)
-    order = np.argsort(flux_sample[flux_pos_array])
-    flux_pos_array = flux_pos_array[order]
-    fk_pos_array = fk_pos_array[order]
-    aligned_time = fk_time_index[fk_pos_array] if fk_time_index is not None else None
-    return (
-        flux_sample[flux_pos_array],
-        flux_prediction[flux_pos_array],
-        target[flux_pos_array],
-        fk_prediction[fk_pos_array],
-        aligned_time,
-    )
+    if flux_sample.shape != fk_sample.shape or not np.array_equal(flux_sample, fk_sample):
+        flux_set = set(map(int, flux_sample))
+        fk_set = set(map(int, fk_sample))
+        raise ValueError(
+            "SubmesoFluxNet and MLE sample_index values do not match exactly: "
+            f"fluxnet_rows={flux_sample.size}, mle_rows={fk_sample.size}, common={len(flux_set & fk_set)}, "
+            f"first_missing_from_mle={sorted(flux_set - fk_set)[:5]}, "
+            f"first_missing_from_fluxnet={sorted(fk_set - flux_set)[:5]}"
+        )
+    return flux_sample, flux_prediction, target, fk_prediction, fk_time_index
 
 
 def annual_block_mean(values: np.ndarray, window: int, block_index: int) -> np.ndarray:
@@ -271,9 +259,9 @@ def write_summary(
             handle.write(f"start_time_index: {start_time}\n")
             handle.write(f"end_time_index: {end_time}\n")
         handle.write(f"submesofluxnet_annual_r2: {fluxnet_r2:.10g}\n")
-        handle.write(f"fk_annual_r2: {fk_r2:.10g}\n")
+        handle.write(f"mle_annual_r2: {fk_r2:.10g}\n")
         handle.write(f"submesofluxnet_nse_mean: {float(np.nanmean(fluxnet_error)):.10g}\n")
-        handle.write(f"fk_nse_mean: {float(np.nanmean(fk_error)):.10g}\n")
+        handle.write(f"mle_nse_mean: {float(np.nanmean(fk_error)):.10g}\n")
 
 
 def main() -> None:
@@ -315,7 +303,7 @@ def main() -> None:
         time_index=time_index[start:stop] if time_index is not None else np.asarray([], dtype=np.int64),
         truth=truth_mean.astype(np.float32),
         submesofluxnet_prediction=fluxnet_mean.astype(np.float32),
-        fk_prediction=fk_mean.astype(np.float32),
+        mle_prediction=fk_mean.astype(np.float32),
         submesofluxnet_normalized_squared_error=fluxnet_error.astype(np.float32),
         fk_normalized_squared_error=fk_error.astype(np.float32),
     )

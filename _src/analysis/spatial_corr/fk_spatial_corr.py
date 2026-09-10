@@ -5,6 +5,9 @@ import argparse
 import csv
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -13,7 +16,7 @@ plt.rcParams["font.sans-serif"] = ["Arial", "DejaVu Sans", "Liberation Sans"]
 plt.rcParams["svg.fonttype"] = "none"
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
-FK_MLE_DIR = PROJECT_DIR / "analysis/fk_mle"
+FK_MLE_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20/final_model_analysis_test"
 
 PALETTE = {
     "line": "#B64A3B",
@@ -25,33 +28,33 @@ PALETTE = {
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Calculate per-snapshot spatial correlation for tuned FK test predictions.")
+    parser = argparse.ArgumentParser(description="Calculate per-snapshot spatial correlation for tuned MLE parameterization test predictions.")
     parser.add_argument(
         "--fk-predictions",
         type=Path,
-        default=FK_MLE_DIR / "upper_40x20/fk_test_Ce2p13062237_prediction_physical.npz",
-        help="FK NPZ containing prediction and sample_index arrays.",
+        default=FK_MLE_DIR / "fk_prediction_physical.npz",
+        help="MLE/FK NPZ containing prediction and sample_index arrays.",
     )
     parser.add_argument(
         "--truth-predictions",
         type=Path,
-        default=PROJECT_DIR / "outputs_train_on_small_domain/upper_40x20_encoder_convlstm/test_predictions_denorm.npz",
-        help="SubmesoFluxNet test NPZ containing the physical-unit target array.",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz",
+        help="Final SubmesoFluxNet test NPZ containing the physical-unit target array.",
     )
     parser.add_argument(
         "--csv-output",
         type=Path,
-        default=PROJECT_DIR / "analysis/spatial_corr/fk_Ce2p13062237_spatial_corr.csv",
+        default=PROJECT_DIR / "analysis/spatial_corr/fk_spatial_corr.csv",
     )
     parser.add_argument(
         "--summary-output",
         type=Path,
-        default=PROJECT_DIR / "analysis/spatial_corr/fk_Ce2p13062237_spatial_corr_summary.txt",
+        default=PROJECT_DIR / "analysis/spatial_corr/fk_spatial_corr_summary.txt",
     )
     parser.add_argument(
         "--plot-output-prefix",
         type=Path,
-        default=PROJECT_DIR / "analysis/spatial_corr/fk_Ce2p13062237_spatial_corr",
+        default=PROJECT_DIR / "analysis/spatial_corr/fk_spatial_corr",
     )
     return parser.parse_args()
 
@@ -93,21 +96,17 @@ def load_aligned_fk_and_truth(fk_path: Path, truth_path: Path) -> tuple[np.ndarr
         truth_sample = np.asarray(truth_data["sample_index"], dtype=np.int64)
         target = np.asarray(truth_data["target"], dtype=np.float64)
 
-    truth_lookup = {int(sample): pos for pos, sample in enumerate(truth_sample)}
-    keep_fk: list[int] = []
-    keep_truth: list[int] = []
-    for fk_pos, sample in enumerate(fk_sample):
-        truth_pos = truth_lookup.get(int(sample))
-        if truth_pos is not None:
-            keep_fk.append(fk_pos)
-            keep_truth.append(truth_pos)
-    if not keep_fk:
-        raise ValueError("No overlapping sample_index values between FK predictions and truth file.")
+    if fk_sample.shape != truth_sample.shape or not np.array_equal(fk_sample, truth_sample):
+        fk_set = set(map(int, fk_sample))
+        truth_set = set(map(int, truth_sample))
+        raise ValueError(
+            "MLE/FK and SubmesoFluxNet sample_index values do not match exactly: "
+            f"fk_rows={fk_sample.size}, truth_rows={truth_sample.size}, common={len(fk_set & truth_set)}, "
+            f"first_missing_from_fk={sorted(truth_set - fk_set)[:5]}, "
+            f"first_missing_from_truth={sorted(fk_set - truth_set)[:5]}"
+        )
 
-    aligned_sample = fk_sample[np.asarray(keep_fk, dtype=np.int64)]
-    aligned_prediction = fk_prediction[np.asarray(keep_fk, dtype=np.int64)]
-    aligned_target = target[np.asarray(keep_truth, dtype=np.int64)]
-    return aligned_sample, aligned_prediction, aligned_target
+    return fk_sample, fk_prediction, target
 
 
 def finite_summary(values: np.ndarray) -> dict[str, float | int]:
@@ -144,8 +143,8 @@ def write_csv(path: Path, sample_index: np.ndarray, rho: np.ndarray) -> None:
 def write_summary(path: Path, summary: dict[str, float | int], fk_path: Path, truth_path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
-        handle.write("FK spatial correlation summary\n")
-        handle.write(f"fk_predictions: {fk_path}\n")
+        handle.write("MLE parameterization spatial correlation summary\n")
+        handle.write(f"mle_predictions: {fk_path}\n")
         handle.write(f"truth_predictions: {truth_path}\n")
         for key in ("count", "finite_count", "mean", "median", "std", "min", "max", "p05", "p95"):
             value = summary[key]
@@ -185,7 +184,7 @@ def plot_series(path_prefix: Path, sample_index: np.ndarray, rho: np.ndarray, me
     ax.set_ylim(-1.0, 1.0)
     ax.set_xlabel("Test sample index")
     ax.set_ylabel(r"Spatial correlation $\rho_n$")
-    ax.set_title("FK held-out test data")
+    ax.set_title("MLE parameterization final test data")
     ax.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.45, alpha=0.55)
     ax.tick_params(colors=PALETTE["neutral_dark"])
     for spine in ax.spines.values():

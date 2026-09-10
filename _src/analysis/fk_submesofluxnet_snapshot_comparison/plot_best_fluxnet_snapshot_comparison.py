@@ -5,6 +5,8 @@ import argparse
 from pathlib import Path
 
 import matplotlib as mpl
+
+mpl.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LogNorm, Normalize, TwoSlopeNorm
@@ -32,12 +34,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fluxnet-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/model_analysis/outputs/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz",
     )
     parser.add_argument(
         "--fk-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/fk_prediction.npz",
+        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/final_model_analysis_test/fk_prediction_physical.npz",
     )
     parser.add_argument(
         "--output-prefix",
@@ -119,16 +121,16 @@ def align_fk_to_fluxnet(
     fk_prediction: np.ndarray,
     fk_time_index: np.ndarray | None,
 ) -> tuple[np.ndarray, np.ndarray | None]:
-    fk_lookup = {int(sample): pos for pos, sample in enumerate(fk_sample)}
-    positions: list[int] = []
-    for sample in flux_sample:
-        pos = fk_lookup.get(int(sample))
-        if pos is None:
-            raise ValueError(f"sample_index {int(sample)} is missing from FK predictions")
-        positions.append(pos)
-    pos_array = np.asarray(positions, dtype=np.int64)
-    aligned_time = fk_time_index[pos_array] if fk_time_index is not None else None
-    return fk_prediction[pos_array], aligned_time
+    if flux_sample.shape != fk_sample.shape or not np.array_equal(flux_sample, fk_sample):
+        flux_set = set(map(int, flux_sample))
+        fk_set = set(map(int, fk_sample))
+        raise ValueError(
+            "SubmesoFluxNet and MLE sample_index values do not match exactly: "
+            f"fluxnet_rows={flux_sample.size}, mle_rows={fk_sample.size}, common={len(flux_set & fk_set)}, "
+            f"first_missing_from_mle={sorted(flux_set - fk_set)[:5]}, "
+            f"first_missing_from_fluxnet={sorted(fk_set - flux_set)[:5]}"
+        )
+    return fk_prediction, fk_time_index
 
 
 def r2_score(prediction: np.ndarray, target: np.ndarray) -> float:
@@ -286,16 +288,22 @@ def add_vertical_divider(fig: plt.Figure, left_axes: list[plt.Axes], right_axes:
 
 def draw_main_figure(
     *,
-    sample_index: int,
-    fluxnet_r2: float,
-    fk_r2: float,
-    truth_best: np.ndarray,
-    fluxnet_best: np.ndarray,
-    fk_best: np.ndarray,
-    fluxnet_error: np.ndarray,
-    fk_error: np.ndarray,
+    left_sample_index: int,
+    left_time_index: int | None,
+    left_fluxnet_r2: float,
+    left_mle_r2: float,
+    left_truth: np.ndarray,
+    left_fluxnet_prediction: np.ndarray,
+    left_fluxnet_error: np.ndarray,
+    right_sample_index: int,
+    right_time_index: int | None,
+    right_fluxnet_r2: float,
+    right_mle_r2: float,
+    right_truth: np.ndarray,
+    right_mle_prediction: np.ndarray,
+    right_mle_error: np.ndarray,
     fluxnet_temporal_corr: np.ndarray,
-    fk_temporal_corr: np.ndarray,
+    mle_temporal_corr: np.ndarray,
     field_percentile: float,
     error_percentile: float,
     output_prefix: Path,
@@ -303,65 +311,73 @@ def draw_main_figure(
 ) -> None:
     apply_style()
     field_limit = robust_symmetric_limit(
-        np.concatenate([truth_best.ravel(), fluxnet_best.ravel(), fk_best.ravel()]),
+        np.concatenate(
+            [
+                left_truth.ravel(),
+                left_fluxnet_prediction.ravel(),
+                right_truth.ravel(),
+                right_mle_prediction.ravel(),
+            ]
+        ),
         percentile=field_percentile,
         min_limit=1.0,
     )
     field_norm = TwoSlopeNorm(vmin=-field_limit, vcenter=0.0, vmax=field_limit)
 
-    error_values = np.concatenate([fluxnet_error.ravel(), fk_error.ravel()])
+    error_values = np.concatenate([left_fluxnet_error.ravel(), right_mle_error.ravel()])
     error_limit = float(np.nanpercentile(error_values, error_percentile))
     if not np.isfinite(error_limit) or error_limit <= 0:
         error_limit = float(np.nanmax(error_values))
     error_norm = Normalize(vmin=0.0, vmax=max(error_limit, 1.0e-6))
     corr_norm = TwoSlopeNorm(vmin=-1.0, vcenter=0.0, vmax=1.0)
 
-    fig = plt.figure(figsize=(6.65, 3.05), constrained_layout=True)
-    grid = fig.add_gridspec(3, 4, width_ratios=[1.0, 1.0, 1.0, 0.035], height_ratios=[1.0, 1.0, 1.0], wspace=0.04)
-    axes = np.asarray([[fig.add_subplot(grid[row, col]) for col in range(3)] for row in range(3)])
-    cbar_axes = [fig.add_subplot(grid[row, 3]) for row in range(3)]
-
-    truth_image = axes[0, 0].imshow(truth_best, origin="lower", cmap="RdBu_r", norm=field_norm, interpolation="nearest")
-    axes[0, 0].set_title("Truth", fontsize=7.5, pad=4)
-    format_map_axis(axes[0, 0])
-
-    pred_image = None
-    for ax, title, values in (
-        (axes[0, 1], "SubmesoFluxNet", fluxnet_best),
-        (axes[0, 2], fk_label, fk_best),
-    ):
-        pred_image = ax.imshow(values, origin="lower", cmap="RdBu_r", norm=field_norm, interpolation="nearest")
-        ax.set_title(title, fontsize=7.2, pad=4)
+    fig, axes = plt.subplots(2, 4, figsize=(7.1, 2.75), constrained_layout=False)
+    panels = (
+        (axes[0, 0], left_truth, "RdBu_r", field_norm),
+        (axes[0, 1], left_fluxnet_prediction, "RdBu_r", field_norm),
+        (axes[0, 2], left_fluxnet_error, "magma", error_norm),
+        (axes[0, 3], fluxnet_temporal_corr, "RdBu_r", corr_norm),
+        (axes[1, 0], right_truth, "RdBu_r", field_norm),
+        (axes[1, 1], right_mle_prediction, "RdBu_r", field_norm),
+        (axes[1, 2], right_mle_error, "magma", error_norm),
+        (axes[1, 3], mle_temporal_corr, "RdBu_r", corr_norm),
+    )
+    images = []
+    for ax, values, cmap, norm in panels:
+        images.append(ax.imshow(values, origin="lower", cmap=cmap, norm=norm, interpolation="nearest"))
         format_map_axis(ax)
-    add_cbar(fig, pred_image if pred_image is not None else truth_image, cbar_axes[0], r"Heat flux (W m$^{-2}$)")
 
-    error_image = None
-    for ax, title, values in (
-        (axes[1, 1], "SubmesoFluxNet", fluxnet_error),
-        (axes[1, 2], fk_label, fk_error),
-    ):
-        error_image = ax.imshow(values, origin="lower", cmap="magma", norm=error_norm, interpolation="nearest")
-        ax.set_title(title, fontsize=7.2, pad=4)
-        format_map_axis(ax)
-    add_cbar(fig, error_image, cbar_axes[1], r"Error $(\Delta/\sigma_y)^2$")
+    fig.subplots_adjust(left=0.055, right=0.985, top=0.895, bottom=0.205, wspace=0.035, hspace=0.24)
 
-    corr_image = None
-    for ax, title, values in (
-        (axes[2, 1], "SubmesoFluxNet", fluxnet_temporal_corr),
-        (axes[2, 2], fk_label, fk_temporal_corr),
-    ):
-        corr_image = ax.imshow(values, origin="lower", cmap="RdBu_r", norm=corr_norm, interpolation="nearest")
-        ax.set_title(title, fontsize=7.2, pad=4)
-        format_map_axis(ax)
-    add_cbar(fig, corr_image, cbar_axes[2], r"Pearson correlation $\rho$")
+    for ax, title in zip(axes[0], ("Truth", "Prediction", "Error", "Temporal correlation")):
+        ax.set_title(title, fontsize=7.4, pad=3)
 
-    for ax in (axes[1, 0], axes[2, 0]):
-        ax.set_axis_off()
+    axes[0, 0].set_ylabel("SubmesoFluxNet", fontsize=7.4, color=PALETTE["neutral_dark"], labelpad=4)
+    axes[1, 0].set_ylabel(fk_label, fontsize=7.4, color=PALETTE["neutral_dark"], labelpad=4)
 
-    add_vertical_divider(fig, [axes[0, 0], axes[1, 0], axes[2, 0]], [axes[0, 1], axes[1, 1], axes[2, 1]])
+    # Place compact manual colorbars without changing the equal-sized map panels.
+    fig.canvas.draw()
+    heat_left = axes[1, 0].get_position()
+    heat_right = axes[1, 1].get_position()
+    heat_cax = fig.add_axes([heat_left.x0, heat_left.y0 - 0.055, heat_right.x1 - heat_left.x0, 0.018])
+    single_col_items = (
+        (images[2], axes[1, 2], r"Error $(\Delta/\sigma_y)^2$"),
+        (images[3], axes[1, 3], r"Pearson $\rho$"),
+    )
+    cbar = fig.colorbar(images[1], cax=heat_cax, orientation="horizontal")
+    cbar.ax.tick_params(labelsize=5.4, length=2, width=0.5, colors=PALETTE["neutral_dark"])
+    cbar.outline.set_linewidth(0.5)
+    cbar.set_label(r"Heat flux (W m$^{-2}$)", fontsize=5.6, color=PALETTE["neutral_dark"], labelpad=0.5)
+    for image, anchor_ax, label in single_col_items:
+        pos = anchor_ax.get_position()
+        cax = fig.add_axes([pos.x0, pos.y0 - 0.055, pos.width, 0.018])
+        cbar = fig.colorbar(image, cax=cax, orientation="horizontal")
+        cbar.ax.tick_params(labelsize=5.4, length=2, width=0.5, colors=PALETTE["neutral_dark"])
+        cbar.outline.set_linewidth(0.5)
+        cbar.set_label(label, fontsize=5.6, color=PALETTE["neutral_dark"], labelpad=0.5)
+
     save_figure(fig, output_prefix)
     plt.close(fig)
-
 
 def draw_joint_hist_figure(
     *,
@@ -401,38 +417,58 @@ def draw_joint_hist_figure(
 def write_summary(
     path: Path,
     *,
-    sample_index: int,
-    test_position: int,
-    time_index: int | None,
-    selection: str,
-    fluxnet_r2: float,
-    fk_r2: float,
-    fluxnet_spatial_corr: float,
-    fk_spatial_corr: float,
-    fluxnet_error: np.ndarray,
-    fk_error: np.ndarray,
+    best_fluxnet_sample_index: int,
+    best_fluxnet_test_position: int,
+    best_fluxnet_time_index: int | None,
+    best_fluxnet_r2: float,
+    best_fluxnet_mle_r2: float,
+    best_fluxnet_spatial_corr: float,
+    best_fluxnet_mle_spatial_corr: float,
+    best_fluxnet_error: np.ndarray,
+    best_mle_sample_index: int,
+    best_mle_test_position: int,
+    best_mle_time_index: int | None,
+    best_mle_fluxnet_r2: float,
+    best_mle_r2: float,
+    best_mle_fluxnet_spatial_corr: float,
+    best_mle_spatial_corr: float,
+    best_mle_error: np.ndarray,
     fluxnet_temporal_corr: np.ndarray,
-    fk_temporal_corr: np.ndarray,
+    mle_temporal_corr: np.ndarray,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as handle:
-        handle.write("SubmesoFluxNet snapshot comparison against MLE parameterization\n")
-        handle.write(f"selection: {selection}\n")
+        handle.write("Two-column best-snapshot comparison: SubmesoFluxNet versus MLE parameterization\n")
+        handle.write("layout: left column is maximum SubmesoFluxNet R2; right column is maximum MLE parameterization R2\n")
+        handle.write("rows: truth, prediction, normalized squared error, temporal correlation\n")
         handle.write("normalized_squared_error: ((prediction - truth) / std(truth_selected_snapshot))^2\n")
-        handle.write("temporal_correlation: pixelwise Pearson correlation over the aligned test time series\n")
-        handle.write(f"sample_index: {sample_index}\n")
-        handle.write(f"test_position: {test_position}\n")
-        if time_index is not None:
-            handle.write(f"time_index: {time_index}\n")
-        handle.write(f"submesofluxnet_snapshot_r2: {fluxnet_r2:.10g}\n")
-        handle.write(f"fk_snapshot_r2: {fk_r2:.10g}\n")
-        handle.write(f"submesofluxnet_snapshot_spatial_corr: {fluxnet_spatial_corr:.10g}\n")
-        handle.write(f"fk_snapshot_spatial_corr: {fk_spatial_corr:.10g}\n")
-        handle.write(f"submesofluxnet_nse_mean: {float(np.nanmean(fluxnet_error)):.10g}\n")
-        handle.write(f"fk_nse_mean: {float(np.nanmean(fk_error)):.10g}\n")
-        handle.write(f"submesofluxnet_temporal_corr_mean: {float(np.nanmean(fluxnet_temporal_corr)):.10g}\n")
-        handle.write(f"fk_temporal_corr_mean: {float(np.nanmean(fk_temporal_corr)):.10g}\n")
+        handle.write("temporal_correlation: pixelwise Pearson correlation over the aligned final test time series\n")
 
+        handle.write("\nBest SubmesoFluxNet column\n")
+        handle.write(f"sample_index: {best_fluxnet_sample_index}\n")
+        handle.write(f"test_position: {best_fluxnet_test_position}\n")
+        if best_fluxnet_time_index is not None:
+            handle.write(f"time_index: {best_fluxnet_time_index}\n")
+        handle.write(f"submesofluxnet_snapshot_r2: {best_fluxnet_r2:.10g}\n")
+        handle.write(f"mle_snapshot_r2_same_sample: {best_fluxnet_mle_r2:.10g}\n")
+        handle.write(f"submesofluxnet_snapshot_spatial_corr: {best_fluxnet_spatial_corr:.10g}\n")
+        handle.write(f"mle_snapshot_spatial_corr_same_sample: {best_fluxnet_mle_spatial_corr:.10g}\n")
+        handle.write(f"submesofluxnet_nse_mean: {float(np.nanmean(best_fluxnet_error)):.10g}\n")
+
+        handle.write("\nBest MLE parameterization column\n")
+        handle.write(f"sample_index: {best_mle_sample_index}\n")
+        handle.write(f"test_position: {best_mle_test_position}\n")
+        if best_mle_time_index is not None:
+            handle.write(f"time_index: {best_mle_time_index}\n")
+        handle.write(f"submesofluxnet_snapshot_r2_same_sample: {best_mle_fluxnet_r2:.10g}\n")
+        handle.write(f"mle_snapshot_r2: {best_mle_r2:.10g}\n")
+        handle.write(f"submesofluxnet_snapshot_spatial_corr_same_sample: {best_mle_fluxnet_spatial_corr:.10g}\n")
+        handle.write(f"mle_snapshot_spatial_corr: {best_mle_spatial_corr:.10g}\n")
+        handle.write(f"mle_nse_mean: {float(np.nanmean(best_mle_error)):.10g}\n")
+
+        handle.write("\nTemporal correlation maps\n")
+        handle.write(f"submesofluxnet_temporal_corr_mean: {float(np.nanmean(fluxnet_temporal_corr)):.10g}\n")
+        handle.write(f"mle_temporal_corr_mean: {float(np.nanmean(mle_temporal_corr)):.10g}\n")
 
 def main() -> None:
     args = parse_args()
@@ -441,47 +477,52 @@ def main() -> None:
     fk_aligned, fk_time_aligned = align_fk_to_fluxnet(flux_sample, fk_sample, fk_prediction, fk_time_index)
 
     fk_r2_series = np.asarray([r2_score(fk_aligned[n], target[n]) for n in range(target.shape[0])], dtype=np.float64)
-    if args.selection == "best-fluxnet":
-        best_pos = int(np.nanargmax(flux_r2))
-        selection_text = "maximum SubmesoFluxNet per-snapshot R2 on the current model_analysis test set"
-    else:
-        best_pos = int(np.nanargmax(fk_r2_series))
-        selection_text = "maximum MLE parameterization per-snapshot R2 on the current model_analysis test set"
+    best_fluxnet_pos = int(np.nanargmax(flux_r2))
+    best_mle_pos = int(np.nanargmax(fk_r2_series))
 
-    sample_index = int(flux_sample[best_pos])
-    time_index = int(fk_time_aligned[best_pos]) if fk_time_aligned is not None else None
-    truth_best = target[best_pos]
-    fluxnet_best = flux_prediction[best_pos]
-    fk_best = fk_aligned[best_pos]
-
-    fluxnet_error = normalized_squared_error(fluxnet_best, truth_best)
-    fk_error = normalized_squared_error(fk_best, truth_best)
     fluxnet_temporal_corr = temporal_corr_map(flux_prediction, target)
-    fk_temporal_corr = temporal_corr_map(fk_aligned, target)
-    fk_r2 = float(fk_r2_series[best_pos])
-    fluxnet_spcorr = spatial_corr(fluxnet_best, truth_best)
-    fk_spcorr = spatial_corr(fk_best, truth_best)
+    mle_temporal_corr = temporal_corr_map(fk_aligned, target)
+
+    left_truth = target[best_fluxnet_pos]
+    left_fluxnet = flux_prediction[best_fluxnet_pos]
+    left_mle = fk_aligned[best_fluxnet_pos]
+    left_fluxnet_error = normalized_squared_error(left_fluxnet, left_truth)
+
+    right_truth = target[best_mle_pos]
+    right_fluxnet = flux_prediction[best_mle_pos]
+    right_mle = fk_aligned[best_mle_pos]
+    right_mle_error = normalized_squared_error(right_mle, right_truth)
+
+    left_time = int(fk_time_aligned[best_fluxnet_pos]) if fk_time_aligned is not None else None
+    right_time = int(fk_time_aligned[best_mle_pos]) if fk_time_aligned is not None else None
 
     draw_main_figure(
-        sample_index=sample_index,
-        fluxnet_r2=float(flux_r2[best_pos]),
-        fk_r2=fk_r2,
-        truth_best=truth_best,
-        fluxnet_best=fluxnet_best,
-        fk_best=fk_best,
-        fluxnet_error=fluxnet_error,
-        fk_error=fk_error,
+        left_sample_index=int(flux_sample[best_fluxnet_pos]),
+        left_time_index=left_time,
+        left_fluxnet_r2=float(flux_r2[best_fluxnet_pos]),
+        left_mle_r2=float(fk_r2_series[best_fluxnet_pos]),
+        left_truth=left_truth,
+        left_fluxnet_prediction=left_fluxnet,
+        left_fluxnet_error=left_fluxnet_error,
+        right_sample_index=int(flux_sample[best_mle_pos]),
+        right_time_index=right_time,
+        right_fluxnet_r2=float(flux_r2[best_mle_pos]),
+        right_mle_r2=float(fk_r2_series[best_mle_pos]),
+        right_truth=right_truth,
+        right_mle_prediction=right_mle,
+        right_mle_error=right_mle_error,
         fluxnet_temporal_corr=fluxnet_temporal_corr,
-        fk_temporal_corr=fk_temporal_corr,
+        mle_temporal_corr=mle_temporal_corr,
         field_percentile=args.field_percentile,
         error_percentile=args.error_percentile,
         output_prefix=args.output_prefix,
         fk_label=args.fk_display_label,
     )
+
     draw_joint_hist_figure(
-        truth_best=truth_best,
-        fluxnet_best=fluxnet_best,
-        fk_best=fk_best,
+        truth_best=right_truth,
+        fluxnet_best=right_fluxnet,
+        fk_best=right_mle,
         hist_bins=args.hist_bins,
         output_prefix=args.joint_output_prefix,
         fk_label=args.fk_display_label,
@@ -490,41 +531,56 @@ def main() -> None:
     args.data_output.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         args.data_output,
-        sample_index=np.asarray([sample_index], dtype=np.int64),
-        test_position=np.asarray([best_pos], dtype=np.int64),
-        time_index=np.asarray([time_index], dtype=np.int64) if time_index is not None else np.asarray([], dtype=np.int64),
-        truth=truth_best.astype(np.float32),
-        submesofluxnet_prediction=fluxnet_best.astype(np.float32),
-        fk_prediction=fk_best.astype(np.float32),
-        submesofluxnet_normalized_squared_error=fluxnet_error.astype(np.float32),
-        fk_normalized_squared_error=fk_error.astype(np.float32),
+        best_submesofluxnet_sample_index=np.asarray([int(flux_sample[best_fluxnet_pos])], dtype=np.int64),
+        best_submesofluxnet_test_position=np.asarray([best_fluxnet_pos], dtype=np.int64),
+        best_submesofluxnet_time_index=np.asarray([left_time], dtype=np.int64) if left_time is not None else np.asarray([], dtype=np.int64),
+        best_submesofluxnet_truth=left_truth.astype(np.float32),
+        best_submesofluxnet_prediction=left_fluxnet.astype(np.float32),
+        best_submesofluxnet_mle_prediction_same_sample=left_mle.astype(np.float32),
+        best_submesofluxnet_normalized_squared_error=left_fluxnet_error.astype(np.float32),
+        best_mle_sample_index=np.asarray([int(flux_sample[best_mle_pos])], dtype=np.int64),
+        best_mle_test_position=np.asarray([best_mle_pos], dtype=np.int64),
+        best_mle_time_index=np.asarray([right_time], dtype=np.int64) if right_time is not None else np.asarray([], dtype=np.int64),
+        best_mle_truth=right_truth.astype(np.float32),
+        best_mle_prediction=right_mle.astype(np.float32),
+        best_mle_submesofluxnet_prediction_same_sample=right_fluxnet.astype(np.float32),
+        best_mle_normalized_squared_error=right_mle_error.astype(np.float32),
         submesofluxnet_temporal_corr=fluxnet_temporal_corr.astype(np.float32),
-        fk_temporal_corr=fk_temporal_corr.astype(np.float32),
+        mle_temporal_corr=mle_temporal_corr.astype(np.float32),
     )
+
     write_summary(
         args.summary_output,
-        sample_index=sample_index,
-        test_position=best_pos,
-        time_index=time_index,
-        selection=selection_text,
-        fluxnet_r2=float(flux_r2[best_pos]),
-        fk_r2=fk_r2,
-        fluxnet_spatial_corr=fluxnet_spcorr,
-        fk_spatial_corr=fk_spcorr,
-        fluxnet_error=fluxnet_error,
-        fk_error=fk_error,
+        best_fluxnet_sample_index=int(flux_sample[best_fluxnet_pos]),
+        best_fluxnet_test_position=best_fluxnet_pos,
+        best_fluxnet_time_index=left_time,
+        best_fluxnet_r2=float(flux_r2[best_fluxnet_pos]),
+        best_fluxnet_mle_r2=float(fk_r2_series[best_fluxnet_pos]),
+        best_fluxnet_spatial_corr=spatial_corr(left_fluxnet, left_truth),
+        best_fluxnet_mle_spatial_corr=spatial_corr(left_mle, left_truth),
+        best_fluxnet_error=left_fluxnet_error,
+        best_mle_sample_index=int(flux_sample[best_mle_pos]),
+        best_mle_test_position=best_mle_pos,
+        best_mle_time_index=right_time,
+        best_mle_fluxnet_r2=float(flux_r2[best_mle_pos]),
+        best_mle_r2=float(fk_r2_series[best_mle_pos]),
+        best_mle_fluxnet_spatial_corr=spatial_corr(right_fluxnet, right_truth),
+        best_mle_spatial_corr=spatial_corr(right_mle, right_truth),
+        best_mle_error=right_mle_error,
         fluxnet_temporal_corr=fluxnet_temporal_corr,
-        fk_temporal_corr=fk_temporal_corr,
+        mle_temporal_corr=mle_temporal_corr,
     )
 
     print(f"Saved {args.output_prefix}.png", flush=True)
     print(f"Saved {args.joint_output_prefix}.png", flush=True)
     print(f"Saved {args.summary_output}", flush=True)
     print(f"Saved {args.data_output}", flush=True)
-    print(f"Selected sample: {sample_index}", flush=True)
-    print(f"Selection: {selection_text}", flush=True)
-    print(f"SubmesoFluxNet R2: {float(flux_r2[best_pos]):.6f}", flush=True)
-    print(f"{args.fk_display_label} R2: {fk_r2:.6f}", flush=True)
+    print(f"Best SubmesoFluxNet sample: {int(flux_sample[best_fluxnet_pos])}", flush=True)
+    print(f"  SubmesoFluxNet R2: {float(flux_r2[best_fluxnet_pos]):.6f}", flush=True)
+    print(f"  {args.fk_display_label} R2 on same sample: {float(fk_r2_series[best_fluxnet_pos]):.6f}", flush=True)
+    print(f"Best {args.fk_display_label} sample: {int(flux_sample[best_mle_pos])}", flush=True)
+    print(f"  SubmesoFluxNet R2 on same sample: {float(flux_r2[best_mle_pos]):.6f}", flush=True)
+    print(f"  {args.fk_display_label} R2: {float(fk_r2_series[best_mle_pos]):.6f}", flush=True)
 
 
 if __name__ == "__main__":
