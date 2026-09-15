@@ -22,6 +22,23 @@ DEFAULT_MANIFEST = HERE / "physics_variables_best_sample/physics_variable_manife
 DEFAULT_OUTPUT_DIR = HERE / "best_sample_pca_physics"
 BOTTLENECK_FEATURE_NAMES = ["Feature 1", "Feature 2", "Feature 3", "Feature 4"]
 
+# Fixed physical-process order shared by both correlation heatmaps.
+PHYSICS_VARIABLES = [
+    ("T", r"$T$"),
+    ("rho", r"$\rho$"),
+    ("W", r"$w$"),
+    ("KPPhbl", r"$h_{\mathrm{bl}}$"),
+    ("gradT", r"$|\nabla_h T|$"),
+    ("Rossby_number", r"$\zeta/f$"),
+    ("strain", r"$S$"),
+    ("strain_efficiency", r"$\gamma$"),
+    ("normal_strain", r"$S_n$"),
+    ("shear_strain", r"$S_s$"),
+    ("frontogenesis_FT", r"$F_T$"),
+    ("strain_times_gradT", r"$S|\nabla_h T|$"),
+]
+
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -134,8 +151,10 @@ def load_variable_names(path: Path, fallback: list[str]) -> list[str]:
 def load_physics(path: Path, manifest: Path) -> tuple[np.ndarray, list[str], int]:
     with np.load(path, allow_pickle=True) as data:
         sample_index = np.asarray(data["sample_index"], dtype=np.int64).reshape(-1)
-        candidates = [name for name in data.files if name not in {"sample_index", "test_position", "time_index", "selected_r2"}]
-        variable_names = [name for name in load_variable_names(manifest, candidates) if name in data.files]
+        variable_names = [name for name, _label in PHYSICS_VARIABLES]
+        missing = [name for name in variable_names if name not in data.files]
+        if missing:
+            raise ValueError(f"Missing required physics variables: {missing}. Re-run prepare_physics_variables.py.")
         fields = []
         for name in variable_names:
             arr = np.asarray(data[name], dtype=np.float64)
@@ -177,14 +196,14 @@ def plot_pca_results(path: Path, features: np.ndarray, pca: dict[str, np.ndarray
 
 def plot_corr_heatmap(path: Path, corr: np.ndarray, row_labels: list[str], col_labels: list[str], title: str, dpi: int) -> None:
     style()
-    height = max(6.0, 0.16 * len(row_labels) + 1.4)
+    height = max(3.6, 0.24 * len(row_labels) + 1.0)
     width = max(4.5, 0.42 * len(col_labels) + 2.7)
     fig, ax = plt.subplots(figsize=(width, height), constrained_layout=True)
     mesh = ax.imshow(corr, origin="upper", aspect="auto", cmap="RdBu_r", vmin=-1, vmax=1, interpolation="nearest")
     ax.set_xticks(np.arange(len(col_labels)))
     ax.set_xticklabels(col_labels, rotation=45, ha="right")
     ax.set_yticks(np.arange(len(row_labels)))
-    ax.set_yticklabels(row_labels, fontsize=5.8)
+    ax.set_yticklabels(row_labels, fontsize=8)
     ax.set_title(title, fontsize=9, pad=5)
     ax.tick_params(length=2)
     for row in range(corr.shape[0]):
@@ -258,7 +277,7 @@ def main() -> None:
     plot_corr_heatmap(
         output_dir / "physics_vs_bottleneck_features_correlation.png",
         physics_feature_corr,
-        physics_names,
+        [label for _name, label in PHYSICS_VARIABLES],
         BOTTLENECK_FEATURE_NAMES,
         f"Physics variables vs bottleneck feature maps: sample {sample_index}",
         args.dpi,
@@ -266,7 +285,7 @@ def main() -> None:
     plot_corr_heatmap(
         output_dir / "physics_vs_bottleneck_pca_correlation.png",
         physics_pc_corr,
-        physics_names,
+        [label for _name, label in PHYSICS_VARIABLES],
         [f"PC{i}" for i in range(1, pc_maps.shape[0] + 1)],
         f"Physics variables vs bottleneck PCA components: sample {sample_index}",
         args.dpi,

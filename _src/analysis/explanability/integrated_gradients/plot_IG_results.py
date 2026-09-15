@@ -35,7 +35,7 @@ def style() -> None:
 
 def feature_order(names: list[str], geographic: np.ndarray) -> np.ndarray:
     scores = np.nansum(np.abs(geographic), axis=(1, 2))
-    return np.asarray(np.argsort(scores)[::-1], dtype=int)
+    return np.asarray(np.argsort(-scores, kind="stable"), dtype=int)
 
 
 def feature_maps(
@@ -43,6 +43,10 @@ def feature_maps(
     cbar_label=None, figsize=(10.4, 4.6),
 ):
     style()
+    # Rank signed maps after cancellation, using magnitude rather than sign.
+    order = feature_order(names, values)
+    values = values[order]
+    names = [names[index] for index in order]
     fig, axes = plt.subplots(2, 4, figsize=figsize, constrained_layout=True)
     fig.set_constrained_layout_pads(w_pad=0.025, h_pad=0.035, wspace=0.025, hspace=0.04)
     global_finite = np.abs(values[np.isfinite(values)])
@@ -98,6 +102,9 @@ def radial_curves(centered, dx_km, dy_km):
 
 def target_centered_with_distance(centered, names, curves, dx_km, dy_km, output):
     style()
+    order = feature_order(names, centered)
+    centered = centered[order]
+    names = [names[index] for index in order]
     _, height, width = centered.shape
     x_offsets = (np.arange(width) - width // 2) * dx_km
     y_offsets = (np.arange(height) - height // 2) * dy_km
@@ -113,7 +120,7 @@ def target_centered_with_distance(centered, names, curves, dx_km, dy_km, output)
             centered[index], origin="lower", aspect="equal", cmap="magma",
             vmin=0, vmax=vmax, extent=extent, interpolation="nearest",
         )
-        ax.set_title(names[index], fontsize=7, pad=2)
+        ax.set_title(f"{index + 1}. {names[index]}", fontsize=7, pad=2)
         if index >= 4:
             ax.set_xlabel(r"$\Delta x$ (km)")
         if index % 4 == 0:

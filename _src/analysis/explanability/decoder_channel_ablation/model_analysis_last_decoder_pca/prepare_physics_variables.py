@@ -104,6 +104,7 @@ def calculate_fields(source: dict[str, np.ndarray], dx_m: float, dy_m: float, f0
     gradt_dot_strain_tensor_gradt = frontogenesis_numerator
     frontogenesis_ft = safe_divide(-frontogenesis_numerator, grad_t)
     frontogenesis_rate = safe_divide(-frontogenesis_numerator, grad_t**2)
+    strain_efficiency = safe_divide(2.0 * frontogenesis_ft, strain_derived * grad_t)
     qx = -(dudx * dtdx + dvdx * dtdy)
     qy = -(dudy * dtdx + dvdy * dtdy)
     q_convergence = -(ddx_periodic(qx, dx_m) + ddy_nonperiodic(qy, dy_m))
@@ -160,6 +161,7 @@ def calculate_fields(source: dict[str, np.ndarray], dx_m: float, dy_m: float, f0
     add(fields, definitions, "frontogenesis_FT", frontogenesis_ft, "degC m-1 s-1", "-(Tx^2 Ux + Ty^2 Vy + Tx Ty (Uy + Vx))/|gradT|")
     add(fields, definitions, "Fx", frontogenesis_ft, "degC m-1 s-1", "Alias of frontogenesis_FT")
     add(fields, definitions, "frontogenesis_rate", frontogenesis_rate, "s-1", "frontogenesis_FT/|gradT|")
+    add(fields, definitions, "strain_efficiency", strain_efficiency, "1", "2*frontogenesis_FT/(strain_derived*|gradT|); positive when strain orientation sharpens the temperature front")
     add(fields, definitions, "Qx", qx, "degC m-1 s-1", "-(Ux Tx + Vx Ty)")
     add(fields, definitions, "Qy", qy, "degC m-1 s-1", "-(Uy Tx + Vy Ty)")
     add(fields, definitions, "Q_convergence", q_convergence, "degC m-2 s-1", "-(dQx/dx + dQy/dy)")

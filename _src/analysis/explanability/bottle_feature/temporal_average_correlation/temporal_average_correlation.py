@@ -5,10 +5,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import importlib.util
-import re
 from pathlib import Path
-from typing import Any
 
 import matplotlib as mpl
 mpl.use("Agg")
@@ -33,18 +32,20 @@ FEATURE_NAMES = list(source_module.FEATURE_NAMES)
 calculate_fields = source_module.calculate_fields
 
 VARIABLE_SPECS: list[tuple[str, str, str]] = [
-    ("T", "Thermal structure", r"$T$"),
-    ("rho", "Density structure", r"$\rho$"),
-    ("gradT", "Thermal-front strength", r"$|\nabla_h T|$"),
-    ("strain", "Deformation strain", r"$S$"),
-    ("strain_times_gradT", "Compound frontal deformation", r"$S|\nabla_h T|$"),
-    ("frontogenesis_FT", "Frontogenesis", r"$F_T$"),
-    ("zeta", "Rotation", r"$\zeta$"),
-    ("Wprime_times_Tprime", "Flux-like diagnostic", r"$w'T'$"),
-    ("KPPhbl", "Mixed-layer structure", r"$h_{bl}$"),
+    ("T", "Background state", r"$T$"),
+    ("rho", "Background state", r"$\rho$"),
+    ("KPPhbl", "Background state", r"$h_{\mathrm{bl}}$"),
+    ("gradT", "Frontal structure", r"$|\nabla_h T|$"),
+    ("frontogenesis_FT", "Frontal structure", r"$F_T$"),
+    ("strain_times_gradT", "Frontal structure", r"$S|\nabla_h T|$"),
+    ("Rossby_number", "Rotation/deformation", r"$\zeta/f$"),
+    ("strain", "Rotation/deformation", r"$S$"),
+    ("strain_efficiency", "Rotation/deformation", r"$\gamma$"),
+    ("normal_strain", "Rotation/deformation", r"$S_n$"),
+    ("shear_strain", "Rotation/deformation", r"$S_s$"),
+    ("W", "Vertical exchange", r"$w$"),
 ]
 BOTTLENECK_LABELS = ["Feature 1", "Feature 2", "Feature 3", "Feature 4"]
-PCA_LABELS = ["PC1", "PC2", "PC3", "PC4"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,6 +64,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--beta-reference", choices=("center", "south", "north"), default="center")
     parser.add_argument("--reuse-cache", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--dpi", type=int, default=600)
+    parser.add_argument("--replot-only", action="store_true", help="Plot saved correlations without recalculating them.")
+    parser.add_argument("--snapshot-days", type=float, default=None,
+                        help="Physical interval between snapshots in model days; specify explicitly.")
+    parser.add_argument("--time-index", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/time_index.npy")
+    parser.add_argument("--bootstrap-repeats", type=int, default=2000)
+    parser.add_argument("--bootstrap-block", type=int, default=30,
+                        help="Minimum block length in correlation-series samples; increased to the rolling window.")
+    parser.add_argument("--min-blocks", type=int, default=5)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--final-window-days", type=float, default=356.0)
     return parser.parse_args()
 
 
@@ -82,10 +93,6 @@ def style() -> None:
     })
 
 
-def slugify(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_")
-
-
 def pearsonr_flat(a: np.ndarray, b: np.ndarray) -> float:
     x = np.asarray(a, dtype=np.float64).ravel()
     y = np.asarray(b, dtype=np.float64).ravel()
@@ -96,21 +103,6 @@ def pearsonr_flat(a: np.ndarray, b: np.ndarray) -> float:
     y = y[valid] - np.mean(y[valid])
     denom = float(np.sqrt(np.sum(x * x) * np.sum(y * y)))
     return float("nan") if denom == 0.0 else float(np.sum(x * y) / denom)
-
-
-def pca_channel_space(feature_maps: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    if feature_maps.ndim != 3:
-        raise ValueError(f"Expected bottleneck features shape (4,H,W), got {feature_maps.shape}")
-    channels, height, width = feature_maps.shape
-    matrix = np.moveaxis(feature_maps, 0, -1).reshape(-1, channels)
-    centered = matrix - np.mean(matrix, axis=0, keepdims=True)
-    u, singular_values, vt = np.linalg.svd(centered, full_matrices=False)
-    scores = u[:, :channels] * singular_values[:channels]
-    pc_maps = scores.reshape(height, width, channels).transpose(2, 0, 1)
-    explained_variance = singular_values**2 / max(centered.shape[0] - 1, 1)
-    total = float(np.sum(explained_variance))
-    ratio = explained_variance[:channels] / total if total > 0 else np.zeros(channels)
-    return pc_maps.astype(np.float64), ratio.astype(np.float64)
 
 
 def trailing_rolling_mean(values: np.ndarray, window: int) -> np.ndarray:
@@ -190,180 +182,195 @@ def load_or_create_physics_cache(args: argparse.Namespace, sample_index: np.ndar
     return {name: np.asarray(values, dtype=np.float64) for name, values in series.items()}
 
 
-def summarize_correlations(physics_series: np.ndarray, latent: np.ndarray, windows: list[int]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    feature_mean = np.empty((len(windows), 4), dtype=np.float64)
-    feature_std = np.empty((len(windows), 4), dtype=np.float64)
-    pca_mean = np.empty((len(windows), 4), dtype=np.float64)
-    pca_std = np.empty((len(windows), 4), dtype=np.float64)
-    for row, window in enumerate(windows):
-        physics_roll = trailing_rolling_mean(physics_series, window)
-        latent_roll = trailing_rolling_mean(latent, window)
-        feature_corr_samples = np.empty((physics_roll.shape[0], 4), dtype=np.float64)
-        pca_corr_samples = np.empty((physics_roll.shape[0], 4), dtype=np.float64)
-        for sample in range(physics_roll.shape[0]):
-            pc_maps, _ratio = pca_channel_space(latent_roll[sample])
-            for col in range(4):
-                feature_corr_samples[sample, col] = pearsonr_flat(physics_roll[sample], latent_roll[sample, col])
-                pca_corr_samples[sample, col] = pearsonr_flat(physics_roll[sample], pc_maps[col])
-        feature_mean[row] = np.nanmean(feature_corr_samples, axis=0)
-        feature_std[row] = np.nanstd(feature_corr_samples, axis=0)
-        pca_mean[row] = np.nanmean(pca_corr_samples, axis=0)
-        pca_std[row] = np.nanstd(pca_corr_samples, axis=0)
-    return feature_mean, feature_std, pca_mean, pca_std
+def spatial_correlations(physics: np.ndarray, latent: np.ndarray) -> np.ndarray:
+    result = np.empty((len(physics), 4), dtype=np.float64)
+    for sample in range(len(physics)):
+        for feature in range(4):
+            result[sample, feature] = pearsonr_flat(physics[sample], latent[sample, feature])
+    return result
 
 
-def mean_pca_ratio_for_largest_window(latent: np.ndarray, window: int) -> np.ndarray:
-    latent_roll = trailing_rolling_mean(latent, window)
-    ratios = []
-    for sample in range(latent_roll.shape[0]):
-        _pc_maps, ratio = pca_channel_space(latent_roll[sample])
-        ratios.append(ratio)
-    return np.nanmean(np.stack(ratios, axis=0), axis=0)
+def bootstrap_median(values, block, repeats, min_blocks, rng):
+    """Resample paired contiguous blocks of the already-averaged correlation series."""
+    median = np.full(4, np.nan)
+    for feature in range(4):
+        finite = values[:, feature][np.isfinite(values[:, feature])]
+        if finite.size:
+            median[feature] = np.median(finite)
+    lower = np.full(4, np.nan)
+    upper = np.full(4, np.nan)
+    n = len(values)
+    if n // block < min_blocks:
+        return median, lower, upper
+    # Preserve temporal dependence within blocks and pairing among features.
+    estimates = np.full((repeats, 4), np.nan)
+    for repeat in range(repeats):
+        starts = rng.integers(0, n - block + 1, size=(n + block - 1) // block)
+        indices = (starts[:, None] + np.arange(block)).ravel()[:n]
+        draw = values[indices]
+        for feature in range(4):
+            finite = draw[:, feature][np.isfinite(draw[:, feature])]
+            if finite.size:
+                estimates[repeat, feature] = np.median(finite)
+    for feature in range(4):
+        # Do not report intervals if missing values leave too little evidence.
+        if np.isfinite(values[:, feature]).sum() >= min_blocks * block and np.isfinite(estimates[:, feature]).all():
+            lower[feature], upper[feature] = np.quantile(estimates[:, feature], [0.025, 0.975])
+    return median, lower, upper
 
 
-def plot_variable(
-    output: Path,
-    variable: str,
-    group: str,
-    label: str,
-    windows: list[int],
-    feature_mean: np.ndarray,
-    feature_std: np.ndarray,
-    pca_mean: np.ndarray,
-    pca_std: np.ndarray,
-    pca_ratio: np.ndarray,
-    n_samples: int,
-    dpi: int,
-) -> None:
+def top_five_indices(final_correlations):
+    valid = np.flatnonzero(np.isfinite(final_correlations))
+    return valid[np.argsort(-np.abs(final_correlations[valid]), kind="stable")][:5]
+
+
+def averaging_windows(requested, final_days, snapshot_days, n_samples):
+    if not np.isfinite(final_days) or final_days <= 0:
+        raise ValueError("Final averaging window must be finite and positive")
+    count = final_days / snapshot_days
+    final = int(round(count))
+    if final < 1 or not np.isclose(count, final, rtol=0, atol=1e-8):
+        raise ValueError("Final window must be an integer number of snapshots")
+    if final > n_samples:
+        raise ValueError("Final averaging window exceeds the available test series")
+    return sorted({int(w) for w in requested if 0 < w <= final} | {final})
+
+
+def plot_feature_lines(output, values, variables, days, dpi):
     style()
-    fig, ax = plt.subplots(figsize=(5.9, 3.35), constrained_layout=True)
-    feature_colors = ["#275D8C", "#3C8DAD", "#66A182", "#D08C60"]
-    pc_colors = ["#1B1B1B", "#7A5195", "#BC5090", "#EF5675"]
-    x = np.asarray(windows, dtype=float)
-    for i, name in enumerate(BOTTLENECK_LABELS):
-        ax.plot(x, feature_mean[:, i], marker="o", linewidth=1.25, color=feature_colors[i], label=name)
-        ax.fill_between(x, feature_mean[:, i] - feature_std[:, i], feature_mean[:, i] + feature_std[:, i], color=feature_colors[i], alpha=0.08, linewidth=0)
-    for i, name in enumerate(PCA_LABELS):
-        ax.plot(x, pca_mean[:, i], marker="s", linewidth=1.05, linestyle="--", color=pc_colors[i], label=f"{name} ({100 * pca_ratio[i]:.1f}%)")
-        ax.fill_between(x, pca_mean[:, i] - pca_std[:, i], pca_mean[:, i] + pca_std[:, i], color=pc_colors[i], alpha=0.06, linewidth=0)
-    ax.axhline(0, color="#777777", linewidth=0.7)
-    ax.set_xscale("log")
-    ax.set_xticks(windows)
-    ax.set_xticklabels([str(v) for v in windows])
-    ax.set_ylim(-1.02, 1.02)
-    ax.set_xlabel("Rolling mean window across test samples")
-    ax.set_ylabel("Mean spatial Pearson r")
-    ax.set_title(f"{group}: {label}\nrolling windows over {n_samples} test samples", fontsize=9, pad=5)
-    ax.grid(axis="y", color="#D6D6D6", linewidth=0.45)
-    ax.legend(ncol=2, fontsize=6.1, loc="center left", bbox_to_anchor=(1.02, 0.5), borderaxespad=0)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output, dpi=dpi, bbox_inches="tight", pad_inches=0.03)
-    plt.close(fig)
+    lookup = {name: (group, label) for name, group, label in VARIABLE_SPECS}
+    colors = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00",
+              "#56B4E9", "#333333", "#7B3294", "#A6761D", "#1B7837", "#C51B7D"]
+    markers = ["o", "s", "^", "D", "v", "P", "X", "o", "s", "^", "D"]
+    styles = {name: (colors[i], markers[i], "-" if i < 6 else "--")
+              for i, (name, _, _) in enumerate(VARIABLE_SPECS)}
+    if values.shape != (len(variables), len(days), 4):
+        raise ValueError("Saved correlations do not match variables, windows, and four features")
+    output.mkdir(parents=True, exist_ok=True)
+    ranking_rows = []
+    for feature in range(4):
+        selected = top_five_indices(values[:, -1, feature])
+        fig, ax = plt.subplots(figsize=(6.8, 3.8), constrained_layout=True)
+        for rank, vi in enumerate(selected, start=1):
+            variable = variables[vi]
+            ranking_rows.append(dict(feature=feature + 1, rank=rank, variable=variable,
+                                     final_window_days=float(days[-1]),
+                                     correlation=float(values[vi, -1, feature]),
+                                     absolute_correlation=float(abs(values[vi, -1, feature]))))
+            color, marker, linestyle = styles[variable]
+            ax.plot(days, values[vi, :, feature], color=color, marker=marker,
+                    linestyle=linestyle, linewidth=1.3, markersize=4,
+                    label=lookup[variable][1])
+        ax.axhline(0, color="#777777", linewidth=0.7, zorder=0)
+        ax.set_xscale("log")
+        ax.set_xticks(days, labels=[f"{day:g}" for day in days])
+        ax.minorticks_off()
+        ax.set_ylim(-1.02, 1.02)
+        ax.set_xlabel("Temporal averaging window (model days)")
+        ax.set_ylabel("Median spatial Pearson r")
+        ax.set_title(f"Feature {feature + 1}", loc="left", fontsize=10)
+        ax.grid(axis="y", color="#D6D6D6", linewidth=0.45)
+        ax.legend(title=f"Top 5 by |r| at {days[-1]:g} days", loc="center left", bbox_to_anchor=(1.02, 0.5),
+                  fontsize=8, title_fontsize=8, handlelength=2.5, borderaxespad=0)
+        for extension in ("png", "pdf"):
+            fig.savefig(output / f"temporal_average_correlation_feature_{feature + 1}.{extension}",
+                        dpi=dpi, bbox_inches="tight", pad_inches=0.03)
+        plt.close(fig)
+    with (output / "top5_physical_variables_by_feature.csv").open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["feature", "rank", "variable", "final_window_days", "correlation", "absolute_correlation"])
+        writer.writeheader()
+        writer.writerows(ranking_rows)
 
 
 def main() -> None:
     args = parse_args()
-    output_dir = args.output_dir.expanduser()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    variable_lookup = {name: (group, label) for name, group, label in VARIABLE_SPECS}
-    missing = [name for name in args.variables if name not in variable_lookup]
-    if missing:
-        raise ValueError(f"Unknown selected variable(s): {missing}")
-
+    if args.replot_only:
+        with np.load(args.output_dir.expanduser() / "bottleneck_physics_heatmaps.npz") as data:
+            variables = [str(value) for value in data["variables"]]
+            order = [variables.index(name) for name, _, _ in VARIABLE_SPECS if name in variables]
+            days = np.asarray(data["window_days"], dtype=float)
+            if args.snapshot_days is not None:
+                if args.snapshot_days <= 0 or not np.isfinite(args.snapshot_days):
+                    raise ValueError("--snapshot-days must be finite and positive")
+                days = data["rolling_windows"] * args.snapshot_days
+            matches = np.flatnonzero(np.isclose(days, args.final_window_days, rtol=0, atol=1e-8))
+            if len(matches) != 1:
+                raise ValueError(f"Saved results do not contain {args.final_window_days:g} days. Run without --replot-only and specify --snapshot-days to calculate it.")
+            window_order = np.flatnonzero(days <= args.final_window_days)
+            window_order = window_order[np.argsort(days[window_order])]
+            plot_feature_lines(args.output_dir.expanduser(), data["feature_correlations"][order][:, window_order],
+                               [variables[i] for i in order], days[window_order], args.dpi)
+        print("Saved four feature-wise correlation plots from existing results", flush=True)
+        return
+    if args.snapshot_days is None or args.snapshot_days <= 0 or not np.isfinite(args.snapshot_days):
+        raise ValueError("--snapshot-days must be finite and positive")
+    if args.bootstrap_repeats < 100 or args.bootstrap_block < 1 or args.min_blocks < 2:
+        raise ValueError("Use at least 100 bootstrap repeats, a positive block length, and at least two blocks")
+    requested = set(args.variables)
+    lookup = {name: (group, label) for name, group, label in VARIABLE_SPECS}
+    if requested - lookup.keys():
+        raise ValueError(f"Unknown variables: {sorted(requested - lookup.keys())}")
+    variables = [name for name, _, _ in VARIABLE_SPECS if name in requested]
+    if not variables:
+        raise ValueError("Select at least one variable")
     sample_index, r2, latent = load_predictions(args.predictions.expanduser())
     order = np.argsort(sample_index)
-    sample_index = sample_index[order]
-    r2 = r2[order]
-    latent = latent[order]
-    windows = sorted({int(v) for v in args.rolling_windows if int(v) > 0 and int(v) <= latent.shape[0]})
+    sample_index, latent = sample_index[order], latent[order]
+    if not np.all(np.diff(sample_index) == 1):
+        raise ValueError("Rolling means require unique consecutive test samples")
+    times = np.load(args.time_index, mmap_mode="r")[sample_index]
+    if len(times) < 2 or not np.all(np.diff(times) == times[1] - times[0]) or times[1] <= times[0]:
+        raise ValueError("Snapshot timestamps must be uniformly spaced and increasing")
+    windows = averaging_windows(args.rolling_windows, args.final_window_days, args.snapshot_days, len(latent))
     if not windows:
-        raise ValueError("No valid rolling windows remain after filtering by test-sample count")
-
-    physics = load_or_create_physics_cache(args, sample_index, args.variables)
-    pca_ratio = mean_pca_ratio_for_largest_window(latent, max(windows))
-
-    all_rows: list[dict[str, str | int | float]] = []
-    feature_results = []
-    pca_results = []
-    for variable in args.variables:
-        group, label = variable_lookup[variable]
-        series = np.asarray(physics[variable], dtype=np.float64)
-        if series.shape[0] != latent.shape[0]:
-            raise ValueError(f"{variable} has {series.shape[0]} samples but latent has {latent.shape[0]}")
-        feature_mean, feature_std, pca_mean, pca_std = summarize_correlations(series, latent, windows)
-        feature_results.append(feature_mean)
-        pca_results.append(pca_mean)
-        for row, window in enumerate(windows):
-            n_windows = latent.shape[0] - window + 1
-            for col, target in enumerate(BOTTLENECK_LABELS):
-                all_rows.append({
-                    "variable": variable,
-                    "group": group,
-                    "target": target,
-                    "target_type": "bottleneck_feature",
-                    "rolling_window": window,
-                    "n_windows": n_windows,
-                    "mean_spatial_pearson_r": feature_mean[row, col],
-                    "std_spatial_pearson_r": feature_std[row, col],
-                    "mean_test_r2": float(np.nanmean(r2)),
-                })
-            for col, target in enumerate(PCA_LABELS):
-                all_rows.append({
-                    "variable": variable,
-                    "group": group,
-                    "target": target,
-                    "target_type": "bottleneck_pca",
-                    "rolling_window": window,
-                    "n_windows": n_windows,
-                    "mean_spatial_pearson_r": pca_mean[row, col],
-                    "std_spatial_pearson_r": pca_std[row, col],
-                    "mean_test_r2": float(np.nanmean(r2)),
-                })
-        plot_variable(
-            output_dir / f"temporal_average_correlation_{slugify(variable)}.png",
-            variable,
-            group,
-            label,
-            windows,
-            feature_mean,
-            feature_std,
-            pca_mean,
-            pca_std,
-            pca_ratio,
-            latent.shape[0],
-            args.dpi,
-        )
-
-    with (output_dir / "temporal_average_correlation_summary.csv").open("w", newline="") as handle:
-        fieldnames = [
-            "variable",
-            "group",
-            "target",
-            "target_type",
-            "rolling_window",
-            "n_windows",
-            "mean_spatial_pearson_r",
-            "std_spatial_pearson_r",
-            "mean_test_r2",
-        ]
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        raise ValueError("No valid rolling windows")
+    physics = load_or_create_physics_cache(args, sample_index, variables)
+    shape = (len(variables), len(windows), 4)
+    medians, lower, upper = [np.full(shape, np.nan) for _ in range(3)]
+    rng = np.random.default_rng(args.seed)
+    rows = []
+    for wi, window in enumerate(windows):
+        latent_roll = trailing_rolling_mean(latent, window)
+        block = max(args.bootstrap_block, window)
+        for vi, variable in enumerate(variables):
+            series = np.asarray(physics[variable], dtype=np.float64)
+            if series.shape != (len(latent), *latent.shape[-2:]):
+                raise ValueError(f"Unexpected shape for {variable}: {series.shape}")
+            correlations = spatial_correlations(trailing_rolling_mean(series, window), latent_roll)
+            medians[vi, wi], lower[vi, wi], upper[vi, wi] = bootstrap_median(
+                correlations, block, args.bootstrap_repeats, args.min_blocks, rng)
+            for fi, label in enumerate(BOTTLENECK_LABELS):
+                rows.append(dict(variable=variable, group=lookup[variable][0], feature=label,
+                                 window_snapshots=window, window_days=window * args.snapshot_days,
+                                 n_windows=len(correlations), bootstrap_block=block,
+                                 available_blocks=len(correlations) // block,
+                                 median_spatial_pearson_r=medians[vi, wi, fi],
+                                 ci_lower=lower[vi, wi, fi], ci_upper=upper[vi, wi, fi]))
+        print(f"Finished window {window} snapshots ({window * args.snapshot_days:g} days)", flush=True)
+    significant = (lower > 0) | (upper < 0)
+    output = args.output_dir.expanduser()
+    output.mkdir(parents=True, exist_ok=True)
+    with (output / "bottleneck_physics_heatmaps.csv").open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
-        writer.writerows(all_rows)
-
-    np.savez_compressed(
-        output_dir / "temporal_average_correlation_results.npz",
-        sample_index=sample_index.astype(np.int64),
-        test_r2=r2.astype(np.float64),
-        rolling_windows=np.asarray(windows, dtype=np.int64),
-        variables=np.asarray(args.variables),
-        bottleneck_labels=np.asarray(BOTTLENECK_LABELS),
-        pca_labels=np.asarray(PCA_LABELS),
-        mean_pca_explained_variance_ratio=pca_ratio.astype(np.float64),
-        feature_correlations=np.stack(feature_results, axis=0).astype(np.float64),
-        pca_correlations=np.stack(pca_results, axis=0).astype(np.float64),
-    )
-    print(f"Saved temporal-average correlation figures under {output_dir}")
+        writer.writerows(rows)
+    np.savez_compressed(output / "bottleneck_physics_heatmaps.npz", sample_index=sample_index,
+                        variables=np.asarray(variables), rolling_windows=np.asarray(windows),
+                        window_days=np.asarray(windows) * args.snapshot_days,
+                        feature_correlations=medians, ci_lower=lower, ci_upper=upper,
+                        significant=significant)
+    metadata = dict(statistic="median spatial Pearson correlation across trailing rolling windows",
+                    snapshot_days=args.snapshot_days, time_index_spacing=int(times[1] - times[0]),
+                    bootstrap="moving blocks of the per-window correlation series; paired feature resampling",
+                    bootstrap_block="max(bootstrap_block, averaging_window_snapshots)",
+                    bootstrap_block_min=args.bootstrap_block, bootstrap_repeats=args.bootstrap_repeats,
+                    min_blocks=args.min_blocks, seed=args.seed, confidence_level=0.95,
+                    multiplicity="pointwise intervals, no multiple-comparison correction",
+                    missing_ci="insufficient blocks or finite observations; no dot is drawn",
+                    predictions=str(args.predictions), x_path=str(args.x_path), pca=False)
+    (output / "bottleneck_physics_heatmaps_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    plot_feature_lines(output, medians, variables, np.asarray(windows) * args.snapshot_days, args.dpi)
+    print(f"Saved four feature-wise correlation plots and statistics under {output}", flush=True)
 
 
 if __name__ == "__main__":
