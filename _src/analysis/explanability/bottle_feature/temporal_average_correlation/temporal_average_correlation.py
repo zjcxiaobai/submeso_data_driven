@@ -32,18 +32,13 @@ FEATURE_NAMES = list(source_module.FEATURE_NAMES)
 calculate_fields = source_module.calculate_fields
 
 VARIABLE_SPECS: list[tuple[str, str, str]] = [
+    ("shear_strain", "Rotation/deformation", r"$S_s$"),
     ("T", "Background state", r"$T$"),
-    ("rho", "Background state", r"$\rho$"),
-    ("KPPhbl", "Background state", r"$h_{\mathrm{bl}}$"),
+    ("Rossby_number", "Rotation/deformation", r"$Ro$"),
+    ("W", "Vertical exchange", r"$w$"),
     ("gradT", "Frontal structure", r"$|\nabla_h T|$"),
     ("frontogenesis_FT", "Frontal structure", r"$F_T$"),
-    ("strain_times_gradT", "Frontal structure", r"$S|\nabla_h T|$"),
-    ("Rossby_number", "Rotation/deformation", r"$\zeta/f$"),
-    ("strain", "Rotation/deformation", r"$S$"),
-    ("strain_efficiency", "Rotation/deformation", r"$\gamma$"),
     ("normal_strain", "Rotation/deformation", r"$S_n$"),
-    ("shear_strain", "Rotation/deformation", r"$S_s$"),
-    ("W", "Vertical exchange", r"$w$"),
 ]
 BOTTLENECK_LABELS = ["Feature 1", "Feature 2", "Feature 3", "Feature 4"]
 
@@ -219,11 +214,6 @@ def bootstrap_median(values, block, repeats, min_blocks, rng):
     return median, lower, upper
 
 
-def top_five_indices(final_correlations):
-    valid = np.flatnonzero(np.isfinite(final_correlations))
-    return valid[np.argsort(-np.abs(final_correlations[valid]), kind="stable")][:5]
-
-
 def averaging_windows(requested, final_days, snapshot_days, n_samples):
     if not np.isfinite(final_days) or final_days <= 0:
         raise ValueError("Final averaging window must be finite and positive")
@@ -239,47 +229,43 @@ def averaging_windows(requested, final_days, snapshot_days, n_samples):
 def plot_feature_lines(output, values, variables, days, dpi):
     style()
     lookup = {name: (group, label) for name, group, label in VARIABLE_SPECS}
-    colors = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00",
-              "#56B4E9", "#333333", "#7B3294", "#A6761D", "#1B7837", "#C51B7D"]
-    markers = ["o", "s", "^", "D", "v", "P", "X", "o", "s", "^", "D"]
-    styles = {name: (colors[i], markers[i], "-" if i < 6 else "--")
-              for i, (name, _, _) in enumerate(VARIABLE_SPECS)}
+    colors = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#333333", "#7B3294"]
+    markers = ["o", "s", "^", "D", "v", "P", "X", "h"]
+    linestyles = ["-", "-", "-", "-", "--", "--", "--", "--"]
+    styles = {name: (colors[i], markers[i], linestyles[i]) for i, (name, _, _) in enumerate(VARIABLE_SPECS)}
     if values.shape != (len(variables), len(days), 4):
         raise ValueError("Saved correlations do not match variables, windows, and four features")
     output.mkdir(parents=True, exist_ok=True)
-    ranking_rows = []
+    rows = []
+    abs_values = np.abs(values)
     for feature in range(4):
-        selected = top_five_indices(values[:, -1, feature])
         fig, ax = plt.subplots(figsize=(6.8, 3.8), constrained_layout=True)
-        for rank, vi in enumerate(selected, start=1):
-            variable = variables[vi]
-            ranking_rows.append(dict(feature=feature + 1, rank=rank, variable=variable,
-                                     final_window_days=float(days[-1]),
-                                     correlation=float(values[vi, -1, feature]),
-                                     absolute_correlation=float(abs(values[vi, -1, feature]))))
+        for vi, variable in enumerate(variables):
+            rows.append(dict(feature=feature + 1, variable=variable,
+                             final_window_days=float(days[-1]),
+                             absolute_correlation=float(abs_values[vi, -1, feature])))
             color, marker, linestyle = styles[variable]
-            ax.plot(days, values[vi, :, feature], color=color, marker=marker,
+            ax.plot(days, abs_values[vi, :, feature], color=color, marker=marker,
                     linestyle=linestyle, linewidth=1.3, markersize=4,
                     label=lookup[variable][1])
-        ax.axhline(0, color="#777777", linewidth=0.7, zorder=0)
         ax.set_xscale("log")
         ax.set_xticks(days, labels=[f"{day:g}" for day in days])
         ax.minorticks_off()
-        ax.set_ylim(-1.02, 1.02)
+        ax.set_ylim(0.0, 1.02)
         ax.set_xlabel("Temporal averaging window (model days)")
-        ax.set_ylabel("Median spatial Pearson r")
+        ax.set_ylabel(r"Median spatial Pearson $|r|$")
         ax.set_title(f"Feature {feature + 1}", loc="left", fontsize=10)
         ax.grid(axis="y", color="#D6D6D6", linewidth=0.45)
-        ax.legend(title=f"Top 5 by |r| at {days[-1]:g} days", loc="center left", bbox_to_anchor=(1.02, 0.5),
+        ax.legend(title="Physical diagnostics", loc="center left", bbox_to_anchor=(1.02, 0.5),
                   fontsize=8, title_fontsize=8, handlelength=2.5, borderaxespad=0)
         for extension in ("png", "pdf"):
             fig.savefig(output / f"temporal_average_correlation_feature_{feature + 1}.{extension}",
                         dpi=dpi, bbox_inches="tight", pad_inches=0.03)
         plt.close(fig)
-    with (output / "top5_physical_variables_by_feature.csv").open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["feature", "rank", "variable", "final_window_days", "correlation", "absolute_correlation"])
+    with (output / "selected_physical_variables_by_feature.csv").open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["feature", "variable", "final_window_days", "absolute_correlation"])
         writer.writeheader()
-        writer.writerows(ranking_rows)
+        writer.writerows(rows)
 
 
 def main() -> None:
@@ -287,7 +273,11 @@ def main() -> None:
     if args.replot_only:
         with np.load(args.output_dir.expanduser() / "bottleneck_physics_heatmaps.npz") as data:
             variables = [str(value) for value in data["variables"]]
-            order = [variables.index(name) for name, _, _ in VARIABLE_SPECS if name in variables]
+            requested = [name for name, _group, _label in VARIABLE_SPECS]
+            missing = [name for name in requested if name not in variables]
+            if missing:
+                raise ValueError(f"Saved results are missing requested variables: {missing}. Run without --replot-only and use --no-reuse-cache.")
+            order = [variables.index(name) for name in requested]
             days = np.asarray(data["window_days"], dtype=float)
             if args.snapshot_days is not None:
                 if args.snapshot_days <= 0 or not np.isfinite(args.snapshot_days):

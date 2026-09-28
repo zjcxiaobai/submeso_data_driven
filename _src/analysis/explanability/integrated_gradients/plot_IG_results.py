@@ -40,15 +40,19 @@ def feature_order(names: list[str], geographic: np.ndarray) -> np.ndarray:
 
 def feature_maps(
     values, names, output, title, cmap, signed=False, shared_scale=False,
-    cbar_label=None, figsize=(10.4, 4.6),
+    cbar_label=None, figsize=(10.4, 4.6), extent=None,
+    xlabel="x index", ylabel="y index", hspace=0.04, constrained=True,
 ):
     style()
     # Rank signed maps after cancellation, using magnitude rather than sign.
     order = feature_order(names, values)
     values = values[order]
     names = [names[index] for index in order]
-    fig, axes = plt.subplots(2, 4, figsize=figsize, constrained_layout=True)
-    fig.set_constrained_layout_pads(w_pad=0.025, h_pad=0.035, wspace=0.025, hspace=0.04)
+    fig, axes = plt.subplots(2, 4, figsize=figsize, constrained_layout=constrained)
+    if constrained:
+        fig.set_constrained_layout_pads(w_pad=0.025, h_pad=0.006, wspace=0.025, hspace=hspace)
+    else:
+        fig.subplots_adjust(left=0.055, right=0.985, bottom=0.13, top=0.88, wspace=0.16, hspace=hspace)
     global_finite = np.abs(values[np.isfinite(values)])
     shared_vmax = float(np.percentile(global_finite, 99)) if global_finite.size else 1.0
     for index, ax in enumerate(axes.ravel()):
@@ -58,17 +62,23 @@ def feature_maps(
         mesh = ax.imshow(
             image, origin="lower", aspect="equal", cmap=cmap,
             vmin=-vmax if signed else 0, vmax=vmax, interpolation="nearest",
+            extent=extent,
         )
         ax.set_title(f"{index + 1}. {names[index]}", fontsize=8.4, pad=3)
-        ax.set_xticks([0, 20])
-        ax.set_yticks([0, 10])
+        if extent is None:
+            ax.set_xticks([0, 20])
+            ax.set_yticks([0, 10])
+        else:
+            xmin, xmax, ymin, ymax = extent
+            ax.set_xticks([xmin, 0.5 * (xmin + xmax), xmax])
+            ax.set_yticks([ymin, 0.5 * (ymin + ymax), ymax])
         ax.tick_params(labelsize=7.4, length=2.2, width=0.6)
         if index >= 4:
-            ax.set_xlabel("x index", fontsize=8.0)
+            ax.set_xlabel(xlabel, fontsize=8.0)
         else:
             ax.set_xticklabels([])
         if index % 4 == 0:
-            ax.set_ylabel("y index", fontsize=8.0)
+            ax.set_ylabel(ylabel, fontsize=8.0)
         else:
             ax.set_yticklabels([])
         for spine in ax.spines.values():
@@ -194,10 +204,13 @@ def replot(input_path: Path, output_dir: Path) -> None:
         geographic, names, prefix.with_name(prefix.name + "_geographical_feature_maps.png"),
         "|IGs| contribution of Features", "magma", shared_scale=True, cbar_label="Mean |IGs|",
     )
+    _, height, width = signed.shape
+    physical_extent = (0.0, width * dx_km, 0.0, height * dy_km)
     feature_maps(
         signed, names, prefix.with_name(prefix.name + "_signed_contribution_maps.png"),
-        "Signed |IGs| contribution of Features", "RdBu_r", signed=True, shared_scale=True,
-        cbar_label="Mean signed IGs", figsize=(10.4, 4.4),
+        "IGs contribution of Features", "RdBu_r", signed=True, shared_scale=True,
+        cbar_label="IGs", figsize=(10.4, 3.35), extent=physical_extent,
+        xlabel="x distance (km)", ylabel="y distance (km)", hspace=0.02, constrained=False,
     )
     curves = radial_curves(centered, dx_km, dy_km)
     target_centered_with_distance(

@@ -93,6 +93,7 @@ def calculate_fields(source: dict[str, np.ndarray], dx_m: float, dy_m: float, f0
     drhody = ddy_nonperiodic(density, dy_m)
     grad_t = np.hypot(dtdx, dtdy)
     grad_rho = np.hypot(drhodx, drhody)
+    horizontal_buoyancy_gradient = (9.81 / 1025.0) * grad_rho
     divergence = dudx + dvdy
     vorticity_derived = dvdx - dudy
     normal_strain = dudx - dvdy
@@ -146,6 +147,7 @@ def calculate_fields(source: dict[str, np.ndarray], dx_m: float, dy_m: float, f0
     add(fields, definitions, "drhodx", drhodx, "kg m-4", "Periodic centered zonal derivative of rho")
     add(fields, definitions, "drhody", drhody, "kg m-4", "Nonperiodic meridional derivative of rho")
     add(fields, definitions, "grad_rho", grad_rho, "kg m-4", "sqrt(drhodx^2 + drhody^2)")
+    add(fields, definitions, "horizontal_buoyancy_gradient", horizontal_buoyancy_gradient, "s-2", "(g/rho0)*sqrt(drhodx^2 + drhody^2), using g=9.81 m s-2 and rho0=1025 kg m-3")
     add(fields, definitions, "dUdx", dudx, "s-1", "Periodic centered zonal derivative of U")
     add(fields, definitions, "dUdy", dudy, "s-1", "Nonperiodic meridional derivative of U")
     add(fields, definitions, "dVdx", dvdx, "s-1", "Periodic centered zonal derivative of V")
