@@ -185,33 +185,13 @@ def spatial_correlations(physics: np.ndarray, latent: np.ndarray) -> np.ndarray:
     return result
 
 
-def bootstrap_median(values, block, repeats, min_blocks, rng):
-    """Resample paired contiguous blocks of the already-averaged correlation series."""
-    median = np.full(4, np.nan)
+def mean_abs_correlation(values: np.ndarray) -> np.ndarray:
+    result = np.full(4, np.nan)
     for feature in range(4):
         finite = values[:, feature][np.isfinite(values[:, feature])]
         if finite.size:
-            median[feature] = np.median(finite)
-    lower = np.full(4, np.nan)
-    upper = np.full(4, np.nan)
-    n = len(values)
-    if n // block < min_blocks:
-        return median, lower, upper
-    # Preserve temporal dependence within blocks and pairing among features.
-    estimates = np.full((repeats, 4), np.nan)
-    for repeat in range(repeats):
-        starts = rng.integers(0, n - block + 1, size=(n + block - 1) // block)
-        indices = (starts[:, None] + np.arange(block)).ravel()[:n]
-        draw = values[indices]
-        for feature in range(4):
-            finite = draw[:, feature][np.isfinite(draw[:, feature])]
-            if finite.size:
-                estimates[repeat, feature] = np.median(finite)
-    for feature in range(4):
-        # Do not report intervals if missing values leave too little evidence.
-        if np.isfinite(values[:, feature]).sum() >= min_blocks * block and np.isfinite(estimates[:, feature]).all():
-            lower[feature], upper[feature] = np.quantile(estimates[:, feature], [0.025, 0.975])
-    return median, lower, upper
+            result[feature] = np.nanmean(np.abs(finite))
+    return result
 
 
 def averaging_windows(requested, final_days, snapshot_days, n_samples):
@@ -243,7 +223,7 @@ def plot_feature_lines(output, values, variables, days, dpi):
         for vi, variable in enumerate(variables):
             rows.append(dict(feature=feature + 1, variable=variable,
                              final_window_days=float(days[-1]),
-                             absolute_correlation=float(abs_values[vi, -1, feature])))
+                             average_absolute_correlation=float(abs_values[vi, -1, feature])))
             color, marker, linestyle = styles[variable]
             ax.plot(days, abs_values[vi, :, feature], color=color, marker=marker,
                     linestyle=linestyle, linewidth=1.3, markersize=4,
@@ -253,7 +233,7 @@ def plot_feature_lines(output, values, variables, days, dpi):
         ax.minorticks_off()
         ax.set_ylim(0.0, 1.02)
         ax.set_xlabel("Temporal averaging window (model days)")
-        ax.set_ylabel(r"Median spatial Pearson $|r|$")
+        ax.set_ylabel(r"Average spatial Pearson $|r|$")
         ax.set_title(f"Feature {feature + 1}", loc="left", fontsize=10)
         ax.grid(axis="y", color="#D6D6D6", linewidth=0.45)
         ax.legend(title="Physical diagnostics", loc="center left", bbox_to_anchor=(1.02, 0.5),
@@ -263,7 +243,7 @@ def plot_feature_lines(output, values, variables, days, dpi):
                         dpi=dpi, bbox_inches="tight", pad_inches=0.03)
         plt.close(fig)
     with (output / "selected_physical_variables_by_feature.csv").open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["feature", "variable", "final_window_days", "absolute_correlation"])
+        writer = csv.DictWriter(handle, fieldnames=["feature", "variable", "final_window_days", "average_absolute_correlation"])
         writer.writeheader()
         writer.writerows(rows)
 
@@ -316,8 +296,7 @@ def main() -> None:
         raise ValueError("No valid rolling windows")
     physics = load_or_create_physics_cache(args, sample_index, variables)
     shape = (len(variables), len(windows), 4)
-    medians, lower, upper = [np.full(shape, np.nan) for _ in range(3)]
-    rng = np.random.default_rng(args.seed)
+    mean_abs = np.full(shape, np.nan)
     rows = []
     for wi, window in enumerate(windows):
         latent_roll = trailing_rolling_mean(latent, window)
@@ -327,17 +306,13 @@ def main() -> None:
             if series.shape != (len(latent), *latent.shape[-2:]):
                 raise ValueError(f"Unexpected shape for {variable}: {series.shape}")
             correlations = spatial_correlations(trailing_rolling_mean(series, window), latent_roll)
-            medians[vi, wi], lower[vi, wi], upper[vi, wi] = bootstrap_median(
-                correlations, block, args.bootstrap_repeats, args.min_blocks, rng)
+            mean_abs[vi, wi] = mean_abs_correlation(correlations)
             for fi, label in enumerate(BOTTLENECK_LABELS):
                 rows.append(dict(variable=variable, group=lookup[variable][0], feature=label,
                                  window_snapshots=window, window_days=window * args.snapshot_days,
-                                 n_windows=len(correlations), bootstrap_block=block,
-                                 available_blocks=len(correlations) // block,
-                                 median_spatial_pearson_r=medians[vi, wi, fi],
-                                 ci_lower=lower[vi, wi, fi], ci_upper=upper[vi, wi, fi]))
+                                 n_windows=len(correlations),
+                                 mean_abs_spatial_pearson_r=mean_abs[vi, wi, fi]))
         print(f"Finished window {window} snapshots ({window * args.snapshot_days:g} days)", flush=True)
-    significant = (lower > 0) | (upper < 0)
     output = args.output_dir.expanduser()
     output.mkdir(parents=True, exist_ok=True)
     with (output / "bottleneck_physics_heatmaps.csv").open("w", newline="") as handle:
@@ -347,19 +322,14 @@ def main() -> None:
     np.savez_compressed(output / "bottleneck_physics_heatmaps.npz", sample_index=sample_index,
                         variables=np.asarray(variables), rolling_windows=np.asarray(windows),
                         window_days=np.asarray(windows) * args.snapshot_days,
-                        feature_correlations=medians, ci_lower=lower, ci_upper=upper,
-                        significant=significant)
-    metadata = dict(statistic="median spatial Pearson correlation across trailing rolling windows",
+                        feature_correlations=mean_abs,
+                        statistic=np.asarray("mean_abs_spatial_pearson_r"))
+    metadata = dict(statistic="mean absolute spatial Pearson correlation across trailing rolling windows",
                     snapshot_days=args.snapshot_days, time_index_spacing=int(times[1] - times[0]),
-                    bootstrap="moving blocks of the per-window correlation series; paired feature resampling",
-                    bootstrap_block="max(bootstrap_block, averaging_window_snapshots)",
-                    bootstrap_block_min=args.bootstrap_block, bootstrap_repeats=args.bootstrap_repeats,
-                    min_blocks=args.min_blocks, seed=args.seed, confidence_level=0.95,
-                    multiplicity="pointwise intervals, no multiple-comparison correction",
-                    missing_ci="insufficient blocks or finite observations; no dot is drawn",
+                    aggregation="for each temporal averaging window, compute spatial Pearson r for every trailing window and average abs(r)",
                     predictions=str(args.predictions), x_path=str(args.x_path), pca=False)
     (output / "bottleneck_physics_heatmaps_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    plot_feature_lines(output, medians, variables, np.asarray(windows) * args.snapshot_days, args.dpi)
+    plot_feature_lines(output, mean_abs, variables, np.asarray(windows) * args.snapshot_days, args.dpi)
     print(f"Saved four feature-wise correlation plots and statistics under {output}", flush=True)
 
 
