@@ -5,25 +5,25 @@ normalized_squared_error: ((prediction - truth) / std(truth_selected_snapshot))^
 temporal_correlation: pixelwise Pearson correlation over the aligned final test time series
 
 Best SubmesoFluxNet column
-sample_index: 10384
-test_position: 49
-time_index: 24817392
-submesofluxnet_snapshot_r2: 0.8827523589
-mle_snapshot_r2_same_sample: 0.2539837749
-submesofluxnet_snapshot_spatial_corr: 0.940805482
-mle_snapshot_spatial_corr_same_sample: 0.5101757586
-submesofluxnet_nse_mean: 0.1172476476
+sample_index: 10390
+test_position: 55
+time_index: 24827760
+submesofluxnet_snapshot_r2: 0.8953667507
+mle_snapshot_r2_same_sample: 0.2608901176
+submesofluxnet_snapshot_spatial_corr: 0.9478477859
+mle_snapshot_spatial_corr_same_sample: 0.5194047655
+submesofluxnet_nse_mean: 0.1046332434
 
 Best MLE parameterization column
 sample_index: 10423
 test_position: 88
 time_index: 24884784
-submesofluxnet_snapshot_r2_same_sample: 0.6715081036
+submesofluxnet_snapshot_r2_same_sample: 0.7121026516
 mle_snapshot_r2: 0.4549524272
-submesofluxnet_snapshot_spatial_corr_same_sample: 0.8213503565
+submesofluxnet_snapshot_spatial_corr_same_sample: 0.8545619086
 mle_snapshot_spatial_corr: 0.6878465091
 mle_nse_mean: 0.5450475728
 
 Temporal correlation maps
-submesofluxnet_temporal_corr_mean: 0.6460000341
+submesofluxnet_temporal_corr_mean: 0.6586903173
 mle_temporal_corr_mean: 0.2585976168

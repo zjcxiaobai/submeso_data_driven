@@ -91,7 +91,7 @@ def apply_style() -> None:
             "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "sans-serif"],
             "svg.fonttype": "none",
             "pdf.fonttype": 42,
-            "font.size": 7,
+            "font.size": 9,
             "axes.spines.right": False,
             "axes.spines.top": False,
             "axes.linewidth": 0.8,
@@ -356,15 +356,23 @@ def draw_figure(
     best_sample: int,
 ) -> None:
     apply_style()
+    title_fs = 10.5
+    axis_label_fs = 10.5
+    tick_fs = 7.8
+    legend_fs = 8.5
+    annotation_fs = 8.5
+    cbar_label_fs = 8.5
     x = sample_index[start:stop]
     y = r2[start:stop]
     y_smooth = rolling_median(y, smooth_window)
     fk_smooth = rolling_median(fk_r2, smooth_window) if fk_r2 is not None else None
 
-    fig = plt.figure(figsize=(8.9, 3.15))
-    ax = fig.add_axes([0.075, 0.17, 0.505, 0.68])
-    ax_map = fig.add_axes([0.685, 0.17, 0.241, 0.68])
-    cax = fig.add_axes([0.938, 0.17, 0.016, 0.68])
+    # Allocate more horizontal space to the skill time series, which is the
+    # primary result, while retaining a compact square domain map.
+    fig = plt.figure(figsize=(9.8, 3.35))
+    ax = fig.add_axes([0.065, 0.16, 0.59, 0.72])
+    ax_map = fig.add_axes([0.735, 0.18, 0.18, 0.64])
+    cax = fig.add_axes([0.945, 0.18, 0.016, 0.64])
 
     fluxnet_label = rf"SubmesoFluxNet, mean $R^2$={mean_r2:.3f}"
     ax.plot(x, y, color=PALETTE["line"], linewidth=0.55, alpha=0.42)
@@ -386,15 +394,15 @@ def draw_figure(
     pad = max(0.06 * (high - low), 0.04)
     ax.set_xlim(int(x[0]), int(x[-1]))
     ax.set_ylim(low - pad, high + pad)
-    ax.set_xlabel("Evaluation subdomain data index", fontsize=8.0)
-    ax.set_ylabel(r"Snapshot $R^2$", fontsize=8.0)
-    ax.set_title(r"Non-local $R^2$ vs time", fontsize=9.4, pad=4)
+    ax.set_xlabel("Evaluation subdomain data index", fontsize=axis_label_fs)
+    ax.set_ylabel(r"Snapshot $R^2$", fontsize=axis_label_fs)
+    ax.set_title(r"Non-local $R^2$ vs time", fontsize=title_fs, pad=5)
     ax.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.45, alpha=0.65)
-    ax.tick_params(labelsize=7.2, length=2.5, width=0.7)
+    ax.tick_params(labelsize=tick_fs, length=2.5, width=0.7)
     ax.legend(
         loc="center",
         bbox_to_anchor=(0.43, 0.18),
-        fontsize=6.8,
+        fontsize=legend_fs,
         handlelength=1.8,
         borderaxespad=0.0,
     )
@@ -407,18 +415,18 @@ def draw_figure(
     ax_map.set_aspect("equal", adjustable="box")
     ax_map.set_xticks([0, 20, 40])
     ax_map.set_yticks([0, 20, 40])
-    ax_map.tick_params(labelsize=7.6, length=2.5, width=0.7)
-    ax_map.set_xlabel("x index", fontsize=8.0)
-    ax_map.set_ylabel("y index", fontsize=8.0)
-    ax_map.set_title("Submesoscale VHF", fontsize=9.4, pad=4)
+    ax_map.tick_params(labelsize=tick_fs, length=2.5, width=0.7)
+    ax_map.set_xlabel("x index", fontsize=axis_label_fs)
+    ax_map.set_ylabel("y index", fontsize=axis_label_fs)
+    ax_map.set_title("Submesoscale VHF", fontsize=title_fs, pad=5)
     ax_map.text(
         -0.05,
         0.75,
-        "Analysis\nsubdomain",
+        "Training\nsubdomain",
         transform=ax_map.transAxes,
         ha="right",
         va="center",
-        fontsize=7.2,
+        fontsize=annotation_fs,
         color=PALETTE["neutral_dark"],
     )
     ax_map.text(
@@ -428,14 +436,14 @@ def draw_figure(
         transform=ax_map.transAxes,
         ha="right",
         va="center",
-        fontsize=7.2,
+        fontsize=annotation_fs,
         color=PALETTE["neutral_dark"],
     )
 
     cbar = fig.colorbar(image, cax=cax, ticks=[-60, -40, -20, 0, 20, 40, 60])
-    cbar.ax.tick_params(labelsize=7.0, length=2.2, width=0.55, colors=PALETTE["neutral_dark"])
+    cbar.ax.tick_params(labelsize=tick_fs, length=2.2, width=0.55, colors=PALETTE["neutral_dark"])
     cbar.outline.set_linewidth(0.55)
-    cbar.set_label(r"W m$^{-2}$", fontsize=7.2, color=PALETTE["neutral_dark"], labelpad=4)
+    cbar.set_label(r"W m$^{-2}$", fontsize=cbar_label_fs, color=PALETTE["neutral_dark"], labelpad=4)
 
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_prefix.with_suffix(".png"), dpi=600, bbox_inches="tight", pad_inches=0.03)

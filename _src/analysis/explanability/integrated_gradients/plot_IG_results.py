@@ -23,7 +23,7 @@ def style() -> None:
     mpl.rcParams.update({
         "font.family": "sans-serif",
         "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "sans-serif"],
-        "font.size": 7,
+        "font.size": 10,
         "axes.spines.right": False,
         "axes.spines.top": False,
         "axes.linewidth": 0.8,
@@ -64,7 +64,7 @@ def feature_maps(
             vmin=-vmax if signed else 0, vmax=vmax, interpolation="nearest",
             extent=extent,
         )
-        ax.set_title(f"{index + 1}. {names[index]}", fontsize=8.4, pad=3)
+        ax.set_title(f"{index + 1}. {names[index]}", fontsize=11.0, pad=3)
         if extent is None:
             ax.set_xticks([0, 20])
             ax.set_yticks([0, 10])
@@ -72,23 +72,23 @@ def feature_maps(
             xmin, xmax, ymin, ymax = extent
             ax.set_xticks([xmin, 0.5 * (xmin + xmax), xmax])
             ax.set_yticks([ymin, 0.5 * (ymin + ymax), ymax])
-        ax.tick_params(labelsize=7.4, length=2.2, width=0.6)
+        ax.tick_params(labelsize=8.5, length=2.2, width=0.6)
         if index >= 4:
-            ax.set_xlabel(xlabel, fontsize=8.0)
+            ax.set_xlabel(xlabel, fontsize=10)
         else:
             ax.set_xticklabels([])
         if index % 4 == 0:
-            ax.set_ylabel(ylabel, fontsize=8.0)
+            ax.set_ylabel(ylabel, fontsize=10)
         else:
             ax.set_yticklabels([])
         for spine in ax.spines.values():
             spine.set_linewidth(0.6)
         cbar = fig.colorbar(mesh, ax=ax, fraction=0.035, pad=0.014)
-        cbar.ax.tick_params(labelsize=6.8, length=2.0, width=0.55)
+        cbar.ax.tick_params(labelsize=8.0, length=2.0, width=0.55)
         cbar.outline.set_linewidth(0.55)
         if cbar_label is not None and index % 4 == 3:
-            cbar.set_label(cbar_label, fontsize=7.0, labelpad=2)
-    fig.suptitle(title, fontsize=10.0, y=1.02)
+            cbar.set_label(cbar_label, fontsize=10.0, labelpad=2)
+    fig.suptitle(title, fontsize=13.0, y=1.02)
     fig.savefig(output, dpi=600, bbox_inches="tight", pad_inches=0.03)
     plt.close(fig)
 
@@ -130,15 +130,16 @@ def target_centered_with_distance(centered, names, curves, dx_km, dy_km, output)
             centered[index], origin="lower", aspect="equal", cmap="magma",
             vmin=0, vmax=vmax, extent=extent, interpolation="nearest",
         )
-        ax.set_title(f"{index + 1}. {names[index]}", fontsize=7, pad=2)
+        ax.set_title(f"{index + 1}. {names[index]}", fontsize=10.0, pad=2)
         if index >= 4:
             ax.set_xlabel(r"$\Delta x$ (km)")
         if index % 4 == 0:
             ax.set_ylabel(r"$\Delta y$ (km)")
         cbar = fig.colorbar(mesh, ax=ax, fraction=0.046, pad=0.02)
         if index % 4 == 3:
-            cbar.set_label("Mean |IGs|", fontsize=6.5, labelpad=2)
-    fig.suptitle("Feature influence around the prediction location", fontsize=9)
+            cbar.ax.tick_params(labelsize=8.0, length=2.0, width=0.55)
+            cbar.set_label("Mean |IGs|", fontsize=10.0, labelpad=2)
+    fig.suptitle("Feature influence around the prediction location", fontsize=10.0)
     fig.savefig(output, dpi=600, bbox_inches="tight")
     plt.close(fig)
 
@@ -154,7 +155,7 @@ def lag_plot(lag_feature, offsets, names, output):
     axes[0].plot(offsets, total_fraction, color="#1F5A85", marker="o", linewidth=1.2)
     axes[0].set_xlabel("Temporal offset")
     axes[0].set_ylabel("Fraction of total |IG|")
-    axes[0].set_title("Total attribution by lag", fontsize=8)
+    axes[0].set_title("Total attribution by lag", fontsize=10.0)
     axes[0].set_ylim(0, max(0.05, float(np.nanmax(total_fraction)) * 1.15))
     axes[0].grid(axis="y", color="#D0D0D0", linewidth=0.4)
     mesh = axes[1].imshow(
@@ -166,8 +167,9 @@ def lag_plot(lag_feature, offsets, names, output):
     axes[1].set_yticks(np.arange(len(offsets)))
     axes[1].set_yticklabels(offsets)
     axes[1].set_ylabel("Temporal offset")
-    axes[1].set_title("Feature-wise attribution across temporal offsets", fontsize=8)
-    fig.colorbar(mesh, ax=axes[1], fraction=0.046, pad=0.02)
+    axes[1].set_title("Feature-wise attribution across temporal offsets", fontsize=10.0)
+    cbar = fig.colorbar(mesh, ax=axes[1], fraction=0.046, pad=0.02)
+    cbar.ax.tick_params(labelsize=8.0, length=2.0, width=0.55)
     fig.savefig(output, dpi=600, bbox_inches="tight")
     plt.close(fig)
 

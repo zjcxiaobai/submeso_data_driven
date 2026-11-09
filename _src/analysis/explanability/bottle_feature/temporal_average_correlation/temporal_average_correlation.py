@@ -218,6 +218,8 @@ def plot_feature_lines(output, values, variables, days, dpi):
     output.mkdir(parents=True, exist_ok=True)
     rows = []
     abs_values = np.abs(values)
+
+    # Keep the original one-feature-per-file outputs for detailed inspection.
     for feature in range(4):
         fig, ax = plt.subplots(figsize=(6.8, 3.8), constrained_layout=True)
         for vi, variable in enumerate(variables):
@@ -242,6 +244,41 @@ def plot_feature_lines(output, values, variables, days, dpi):
             fig.savefig(output / f"temporal_average_correlation_feature_{feature + 1}.{extension}",
                         dpi=dpi, bbox_inches="tight", pad_inches=0.03)
         plt.close(fig)
+
+    # Publication-friendly combined panel: four bottleneck features, one shared legend.
+    fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.25), constrained_layout=False, sharex=True, sharey=True)
+    fig.subplots_adjust(left=0.095, right=0.765, bottom=0.105, top=0.93, wspace=0.17, hspace=0.22)
+    legend_handles = []
+    legend_labels = []
+    panel_labels = ["a", "b", "c", "d"]
+    for feature, ax in enumerate(axes.ravel()):
+        for vi, variable in enumerate(variables):
+            color, marker, linestyle = styles[variable]
+            line, = ax.plot(days, abs_values[vi, :, feature], color=color, marker=marker,
+                            linestyle=linestyle, linewidth=1.15, markersize=3.2,
+                            label=lookup[variable][1])
+            if feature == 0:
+                legend_handles.append(line)
+                legend_labels.append(lookup[variable][1])
+        ax.set_xscale("log")
+        ax.set_xticks(days, labels=[f"{day:g}" for day in days])
+        ax.minorticks_off()
+        ax.set_ylim(0.0, 1.02)
+        ax.grid(axis="y", color="#D8D8D8", linewidth=0.42)
+        ax.set_title(f"{panel_labels[feature]}, Feature {feature + 1}", loc="left", fontsize=8.8, pad=3)
+        ax.tick_params(labelsize=6.7, length=2.3, width=0.65)
+    for ax in axes[:, 0]:
+        ax.set_ylabel(r"Average spatial Pearson $|r|$", fontsize=7.6)
+    for ax in axes[1, :]:
+        ax.set_xlabel("Temporal averaging window (model days)", fontsize=7.6)
+    fig.legend(legend_handles, legend_labels, title="Physical diagnostics",
+               loc="center left", bbox_to_anchor=(0.785, 0.52), fontsize=7.2,
+               title_fontsize=7.5, frameon=False, handlelength=2.2, borderaxespad=0.0)
+    for extension in ("png", "pdf"):
+        fig.savefig(output / f"temporal_average_correlation_features_combined.{extension}",
+                    dpi=dpi, bbox_inches="tight", pad_inches=0.03)
+    plt.close(fig)
+
     with (output / "selected_physical_variables_by_feature.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=["feature", "variable", "final_window_days", "average_absolute_correlation"])
         writer.writeheader()

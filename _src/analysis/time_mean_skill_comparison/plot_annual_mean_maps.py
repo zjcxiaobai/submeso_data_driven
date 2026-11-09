@@ -51,7 +51,7 @@ def apply_style() -> None:
             "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "sans-serif"],
             "svg.fonttype": "none",
             "pdf.fonttype": 42,
-            "font.size": 7,
+            "font.size": 10.5,
             "axes.spines.right": False,
             "axes.spines.top": False,
             "axes.linewidth": 0.65,
@@ -165,9 +165,9 @@ def format_map_axis(ax: plt.Axes) -> None:
 
 def add_cbar(fig: plt.Figure, image, cax: plt.Axes, label: str) -> None:
     cbar = fig.colorbar(image, cax=cax)
-    cbar.ax.tick_params(labelsize=5.8, length=2, width=0.55, colors=PALETTE["neutral_dark"])
+    cbar.ax.tick_params(labelsize=6.5, length=2, width=0.55, colors=PALETTE["neutral_dark"])
     cbar.outline.set_linewidth(0.55)
-    cbar.set_label(label, fontsize=5.9, color=PALETTE["neutral_dark"], labelpad=1.5)
+    cbar.set_label(label, fontsize=8.5, color=PALETTE["neutral_dark"], labelpad=1.5)
 
 
 def save_figure(fig: plt.Figure, output_prefix: Path) -> None:
@@ -213,9 +213,9 @@ def draw_figure(
         (axes[0, 2], fk_label, fk),
     ):
         field_image = ax.imshow(values, origin="lower", cmap="RdBu_r", norm=field_norm, interpolation="nearest")
-        ax.set_title(title, fontsize=7.5, pad=4)
+        ax.set_title(title, fontsize=8.5, pad=4)
         format_map_axis(ax)
-    add_cbar(fig, field_image, cbar_axes[0], r"Annual-mean heat flux (W m$^{-2}$)")
+    add_cbar(fig, field_image, cbar_axes[0], "Annual-mean\nheat flux (W m$^{-2}$)")
 
     axes[1, 0].set_axis_off()
     error_image = None
@@ -224,7 +224,7 @@ def draw_figure(
         (axes[1, 2], fk_label, fk_error),
     ):
         error_image = ax.imshow(values, origin="lower", cmap="magma", norm=error_norm, interpolation="nearest")
-        ax.set_title(title, fontsize=7.5, pad=4)
+        ax.set_title(title, fontsize=8.5, pad=4)
         format_map_axis(ax)
     add_cbar(fig, error_image, cbar_axes[1], r"Error $(\Delta/\sigma_y)^2$")
 

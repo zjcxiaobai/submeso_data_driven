@@ -394,7 +394,7 @@ def plot_distance(
     axes[0].set_ylabel("Cumulative attribution")
     axes[0].set_ylim(0, 1.02)
     axes[0].grid(color="#D0D0D0", linewidth=0.35)
-    axes[0].legend(fontsize=6, ncol=2)
+    axes[0].legend(fontsize=8.5, ncol=2)
     y = np.arange(len(feature_names))
     axes[1].barh(y - 0.18, r50, height=0.34, color="#6B8EAD", label=r"$r_{50}$")
     axes[1].barh(y + 0.18, r90, height=0.34, color="#C75B4A", label=r"$r_{90}$")

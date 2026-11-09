@@ -331,6 +331,7 @@ def draw_main_figure(
     error_norm = Normalize(vmin=0.0, vmax=max(error_limit, 1.0e-6))
     corr_norm = TwoSlopeNorm(vmin=-1.0, vcenter=0.0, vmax=1.0)
 
+    panel_title_fs = 8.5
     fig, axes = plt.subplots(2, 4, figsize=(7.1, 2.75), constrained_layout=False)
     panels = (
         (axes[0, 0], left_truth, "RdBu_r", field_norm),
@@ -350,10 +351,10 @@ def draw_main_figure(
     fig.subplots_adjust(left=0.055, right=0.985, top=0.895, bottom=0.205, wspace=0.035, hspace=0.24)
 
     for ax, title in zip(axes[0], ("Truth", "Prediction", "Error", "Temporal correlation")):
-        ax.set_title(title, fontsize=7.4, pad=3)
+        ax.set_title(title, fontsize=panel_title_fs, pad=3)
 
-    axes[0, 0].set_ylabel("SubmesoFluxNet", fontsize=7.4, color=PALETTE["neutral_dark"], labelpad=4)
-    axes[1, 0].set_ylabel(fk_label, fontsize=7.4, color=PALETTE["neutral_dark"], labelpad=4)
+    axes[0, 0].set_ylabel("SubmesoFluxNet", fontsize=panel_title_fs, color=PALETTE["neutral_dark"], labelpad=4)
+    axes[1, 0].set_ylabel("MLE\nparameterization", fontsize=panel_title_fs, color=PALETTE["neutral_dark"], labelpad=4)
 
     # Place compact manual colorbars without changing the equal-sized map panels.
     fig.canvas.draw()
@@ -367,14 +368,14 @@ def draw_main_figure(
     cbar = fig.colorbar(images[1], cax=heat_cax, orientation="horizontal")
     cbar.ax.tick_params(labelsize=5.4, length=2, width=0.5, colors=PALETTE["neutral_dark"])
     cbar.outline.set_linewidth(0.5)
-    cbar.set_label(r"Heat flux (W m$^{-2}$)", fontsize=5.6, color=PALETTE["neutral_dark"], labelpad=0.5)
+    cbar.set_label(r"Heat flux (W m$^{-2}$)", fontsize=panel_title_fs, color=PALETTE["neutral_dark"], labelpad=0.5)
     for image, anchor_ax, label in single_col_items:
         pos = anchor_ax.get_position()
         cax = fig.add_axes([pos.x0, pos.y0 - 0.055, pos.width, 0.018])
         cbar = fig.colorbar(image, cax=cax, orientation="horizontal")
         cbar.ax.tick_params(labelsize=5.4, length=2, width=0.5, colors=PALETTE["neutral_dark"])
         cbar.outline.set_linewidth(0.5)
-        cbar.set_label(label, fontsize=5.6, color=PALETTE["neutral_dark"], labelpad=0.5)
+        cbar.set_label(label, fontsize=panel_title_fs, color=PALETTE["neutral_dark"], labelpad=0.5)
 
     save_figure(fig, output_prefix)
     plt.close(fig)
