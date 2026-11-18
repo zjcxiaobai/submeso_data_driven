@@ -2,10 +2,10 @@
 import os
 from src.utils import make_grid
 from src.utils import build_coarse_grid
-from src.utils import read_mitgcm
+from submeso_data_driven.utils import read_mitgcm
 import xarray as xr
 import numpy as np
-from src.utils import coarsen_UVWTS
+from submeso_data_driven.utils import coarsen_UVWTS
 from MITgcmutils import mds
 import xarray as xr
 from src.utils import mld_avg

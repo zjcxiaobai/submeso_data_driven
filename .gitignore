@@ -1,7 +1,14 @@
+# data
+data/**
+!data/README.md
+!data/**/
+!data/**/.gitkeep
+!data/**/metadata.json
+
+
 # not track
 check_point/
 runs/
-data/
 scratch/
 *.npy
 *.npz

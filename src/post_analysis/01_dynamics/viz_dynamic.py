@@ -1,12 +1,12 @@
 # plot the dynamics of the model
 import xarray as xr
 import numpy as np
-from src.utils import read_mitgcm
+from submeso_data_driven.utils import read_mitgcm
 from src.utils import vorticity
 from src.utils import Ro
 from src.utils import build_coarse_grid
 from src.utils import wT_submeso
-from src.utils import coarsen_UVWTS
+from submeso_data_driven.utils import coarsen_UVWTS
 from src.utils import temperature_gradient
 # --------------------- MITgcm folder path ----------------------------------
 path_scratch = '/scratch/jczhang/'
