@@ -646,7 +646,7 @@ def main() -> None:
     )
     print(f"Saved grid-cell IG outputs with prefix: {prefix}", flush=True)
     if not args.skip_compact_replot:
-        from plot_IG_results import replot
+        from submeso_data_driven.analysis.interpretability.integrated_gradients.plot_IG_results import replot
 
         replot(prefix.with_suffix(".npz"), output_dir)
 

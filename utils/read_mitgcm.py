@@ -42,9 +42,6 @@ def _ocean_var(grid_dir: str | Path, name: str, t: int, dims: Dims) -> xr.DataAr
 def _vertical_grid_var(grid_dir: str | Path, name: str, dim: str) -> xr.DataArray:
     """
     Read a vertical grid vector.
-
-    MITgcm often writes vertical metrics as (k, 1, 1) / (k_p1, 1, 1), but some
-    workflows store them as true 1D vectors. Normalize both cases to one dim.
     """
     arr = np.asarray(mds.rdmds(_mds_path(grid_dir, name)))
     if arr.ndim == 1:
@@ -59,7 +56,7 @@ def _vertical_grid_var(grid_dir: str | Path, name: str, dim: str) -> xr.DataArra
 
 
 def _assign_ordinal_coords(ds: xr.Dataset) -> xr.Dataset:
-    """Attach simple ordinal coordinates for every MITgcm staggered dimension."""
+    """Attach ordinal coordinates for every MITgcm staggered dimension."""
     coords = {dim: np.arange(size, dtype="int64") for dim, size in ds.sizes.items()}
     return ds.assign_coords(coords)
 
@@ -127,8 +124,7 @@ def read_mitgrid_staggered(grid_dir: str | Path) -> xr.Dataset:
             f"RF={RF.sizes['k_p1']}"
         )
 
-    # MITgcm W points are read with dimension k_l in this project. Its length
-    # matches the number of cell centers for the current vertical velocity files.
+    # MITgcm W points are read with dimension k_l
     k_l = xr.DataArray(np.arange(hFacC.sizes["k"], dtype="int64"), dims="k_l", name="k_l")
 
     ds = xr.Dataset(
