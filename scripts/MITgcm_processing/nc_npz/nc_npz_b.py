@@ -5,7 +5,7 @@ import xarray as xr
 from src.utils import mld_avg
 from src.utils import build_coarse_grid
 from submeso_data_driven.utils import read_mitgcm
-from src.utils import buo
+from submeso_data_driven.utils import buo
 
 
 # -------------------- helpers: load/merge npz --------------------

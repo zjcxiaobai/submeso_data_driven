@@ -11,6 +11,8 @@ from pathlib import Path
 
 import matplotlib
 
+from submeso_data_driven.utils import coarsen_UVWTS, read_mitgcm
+
 matplotlib.use("Agg")
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -25,7 +27,7 @@ REPO_DIR = PROJECT_DIR.parent
 if str(REPO_DIR) not in sys.path:
     sys.path.insert(0, str(REPO_DIR))
 
-from src.utils import build_coarse_grid, coarsen_UVWTS, read_mitgcm  # noqa: E402
+from submeso_data_driven.utils import build_coarse_grid  # noqa: E402
 from src.utils.wT_submeso import submeso_vertical_heat_flux  # noqa: E402
 
 

@@ -2,9 +2,9 @@ import os
 import numpy as np
 import xarray as xr
 
-from src.utils import mld_avg
+from submeso_data_driven.utils import mld_avg
 from src.utils import build_coarse_grid
-from src.utils import read_mitgcm
+from submeso_data_driven.utils import read_mitgcm
 
 
 # -------------------- helpers: load/merge npz --------------------

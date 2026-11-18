@@ -21,6 +21,7 @@ from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from submeso_data_driven.utils import read_mitgcm
 import xarray as xr
 
 
@@ -35,7 +36,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from fk_physics import compute_fk_submeso_heat_flux_one_time  # noqa: E402
-from src.utils import build_coarse_grid, read_mitgcm  # noqa: E402
+from submeso_data_driven.utils import build_coarse_grid  # noqa: E402
 
 
 BEST_CE = 2.25895966  # Best value recorded in Ce_base_case_calculation/ce_random_search_summary.txt.

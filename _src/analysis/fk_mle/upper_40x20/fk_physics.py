@@ -5,6 +5,7 @@ from pathlib import Path
 
 import gsw
 import numpy as np
+from submeso_data_driven.utils import make_grid
 import xarray as xr
 
 
@@ -12,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.utils import make_grid, mld_avg  # noqa: E402
+from submeso_data_driven.utils import mld_avg  # noqa: E402
 
 
 def buo_coarse(ds_grid: xr.Dataset, ds_ocean: xr.Dataset, boundary_y: str = "fill"):
