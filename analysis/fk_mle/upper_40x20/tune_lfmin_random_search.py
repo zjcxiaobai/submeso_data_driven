@@ -17,7 +17,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
-from tune_ce_random_search import (
+from submeso_data_driven.analysis.fk_mle.upper_40x20.tune_ce_random_search import (
     ANALYSIS_DIR,
     FK_TUNING_DIR,
     PROJECT_DIR,

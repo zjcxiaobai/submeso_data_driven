@@ -2,10 +2,10 @@
 import xarray as xr
 import numpy as np
 from submeso_data_driven.utils import read_mitgcm
-from src.utils import vorticity
+from submeso_data_driven.utils import vorticity
 from src.utils import Ro
 from submeso_data_driven.utils import build_coarse_grid
-from src.utils import wT_submeso
+from submeso_data_driven.utils import wT_submeso
 from submeso_data_driven.utils import coarsen_UVWTS
 from src.utils import temperature_gradient
 # --------------------- MITgcm folder path ----------------------------------

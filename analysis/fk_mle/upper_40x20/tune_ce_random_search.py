@@ -36,7 +36,7 @@ if str(PER_SNAPSHOT_DIR) not in sys.path:
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from fk_physics import compute_fk_submeso_heat_flux_one_time  # noqa: E402
+from submeso_data_driven.analysis.fk_mle.upper_40x20.fk_physics import compute_fk_submeso_heat_flux_one_time  # noqa: E402
 from submeso_data_driven.utils import make_grid  # noqa: E402
 
 

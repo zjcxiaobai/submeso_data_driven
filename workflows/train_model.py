@@ -13,8 +13,9 @@ from submesofluxnet.training import train
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("config/config.yaml"))
+    parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
-    train(load_config(args.config))
+    train(load_config(args.config), resume=args.resume)
 
 
 if __name__ == "__main__":

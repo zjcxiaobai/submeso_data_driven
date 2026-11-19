@@ -181,7 +181,7 @@ def make_loaders(config: dict, *, recompute_stats: bool = False):
 
     stats_path = PROJECT_ROOT / config["output"].get(
         "stats",
-        "results/final_model/norm_stats.npz",
+        "results/model/norm_stats.npz",
     )
 
     if recompute_stats or not stats_path.exists():

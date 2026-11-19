@@ -28,7 +28,7 @@ if str(REPO_DIR) not in sys.path:
     sys.path.insert(0, str(REPO_DIR))
 
 from submeso_data_driven.utils import build_coarse_grid  # noqa: E402
-from src.utils.wT_submeso import submeso_vertical_heat_flux  # noqa: E402
+from submeso_data_driven.utils.wT_submeso import submeso_vertical_heat_flux  # noqa: E402
 
 
 HERE = Path(__file__).resolve().parent

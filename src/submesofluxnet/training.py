@@ -52,7 +52,7 @@ def append_csv(path: Path, row: dict) -> None:
         writer.writerow(row)
 
 
-def train(config: dict) -> None:
+def train(config: dict, *, resume: bool = False) -> None:
     """Train the configured model and retain the lowest-validation-loss checkpoint."""
     seed_everything(config["seed"])
     device = get_device(config["device"])
@@ -72,16 +72,33 @@ def train(config: dict) -> None:
         min_lr=train_cfg["scheduler_min_lr"],
     )
     checkpoint_path = PROJECT_ROOT / train_cfg["checkpoint"]
+    latest_path = checkpoint_path.with_name("latest.pt")
     history_path = PROJECT_ROOT / train_cfg["history_csv"]
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    if history_path.exists():
-        history_path.unlink()
 
     best_val = float("inf")
     stale_epochs = 0
     patience = train_cfg["patience"]
+    start_epoch = 1
 
-    for epoch in range(1, train_cfg["epochs"] + 1):
+    if resume:
+        if not latest_path.exists():
+            raise FileNotFoundError(f"No resume checkpoint found: {latest_path}")
+        state = torch.load(latest_path, map_location="cpu")
+        model.load_state_dict(state["model_state"])
+        optimizer.load_state_dict(state["optimizer_state"])
+        scheduler.load_state_dict(state["scheduler_state"])
+        best_val = state["best_val"]
+        stale_epochs = state["stale_epochs"]
+        start_epoch = state["epoch"] + 1
+        torch.set_rng_state(state["torch_rng_state"])
+        if torch.cuda.is_available() and state["cuda_rng_state"]:
+            torch.cuda.set_rng_state_all(state["cuda_rng_state"])
+        print(f"Resuming from epoch {state['epoch']}", flush=True)
+    elif history_path.exists():
+        history_path.unlink()
+
+    for epoch in range(start_epoch, train_cfg["epochs"] + 1):
         train_loss = train_epoch(model, train_loader, optimizer, loss_fn, device)
         train_eval = evaluate_metrics(model, train_loader, loss_fn, device)
         val_stats = evaluate_metrics(model, val_loader, loss_fn, device)
@@ -121,11 +138,27 @@ def train(config: dict) -> None:
             )
         else:
             stale_epochs += 1
-            if stale_epochs >= patience:
-                print(
-                    f"Early stopping at epoch {epoch}; best_val={best_val:.6g}",
-                    flush=True,
-                )
-                break
 
         scheduler.step(val_stats["loss"])
+        torch.save(
+            {
+                "model_state": model.state_dict(),
+                "optimizer_state": optimizer.state_dict(),
+                "scheduler_state": scheduler.state_dict(),
+                "epoch": epoch,
+                "best_val": best_val,
+                "stale_epochs": stale_epochs,
+                "torch_rng_state": torch.get_rng_state(),
+                "cuda_rng_state": torch.cuda.get_rng_state_all()
+                if torch.cuda.is_available()
+                else [],
+            },
+            latest_path,
+        )
+
+        if stale_epochs >= patience:
+            print(
+                f"Early stopping at epoch {epoch}; best_val={best_val:.6g}",
+                flush=True,
+            )
+            break
