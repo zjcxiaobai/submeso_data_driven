@@ -1,16 +1,14 @@
 """Optimization and early-stopping loop for SubmesoFluxNet."""
 
-from __future__ import annotations
-
 import csv
 from pathlib import Path
 
 import torch
 
-from .config import project_dir, resolve
+from .config import PROJECT_ROOT
 from .data import make_loaders
 from .evaluation import evaluate_metrics
-from .losses import build_loss, latent_regularization
+from .losses import build_loss
 from .model import build_model
 from .runtime import get_device, seed_everything
 
@@ -21,44 +19,26 @@ def train_epoch(
     optimizer,
     loss_fn,
     device,
-    *,
-    smooth_weight: float,
-    corr_weight: float,
-    clip_norm: float = 0.0,
-):
-    """Optimize one epoch and return sample-weighted training metrics."""
+) -> float:
+    """Optimize the model for one epoch and return the mean loss."""
     model.train()
-    totals = torch.zeros(5, dtype=torch.float64, device=device)
+    total_loss = 0.0
+    total_samples = 0
+
     for x, y in loader:
         x = x.to(device, non_blocking=True)
         y = y.to(device, non_blocking=True)
+
         optimizer.zero_grad(set_to_none=True)
-        features = model.encode_features(x)
-        prediction = model.decode_features(features)
-        prediction_loss = loss_fn(prediction, y)
-        regularization_loss = latent_regularization(
-            features,
-            smooth_weight=smooth_weight,
-            corr_weight=corr_weight,
-        )
-        loss = prediction_loss + regularization_loss
+        loss = loss_fn(model(x), y)
         loss.backward()
-        if clip_norm > 0.0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_norm)
         optimizer.step()
+
         batch = x.shape[0]
-        totals[0] += loss.detach().double() * batch
-        totals[1] += prediction_loss.detach().double() * batch
-        totals[2] += torch.mean((prediction - y) ** 2).detach().double() * batch
-        totals[3] += torch.mean(torch.abs(prediction - y)).detach().double() * batch
-        totals[4] += batch
-    denominator = totals[4].clamp_min(1.0)
-    return {
-        "loss": float((totals[0] / denominator).item()),
-        "pred_loss": float((totals[1] / denominator).item()),
-        "mse": float((totals[2] / denominator).item()),
-        "mae": float((totals[3] / denominator).item()),
-    }
+        total_loss += loss.item() * batch
+        total_samples += batch
+
+    return total_loss / total_samples
 
 
 def append_csv(path: Path, row: dict) -> None:
@@ -72,64 +52,42 @@ def append_csv(path: Path, row: dict) -> None:
         writer.writerow(row)
 
 
-def build_scheduler(train_cfg: dict, optimizer):
-    """Build the configured learning-rate scheduler."""
-    name = str(train_cfg.get("lr_scheduler", "none")).lower()
-    if name == "none":
-        return None
-    if name == "plateau":
-        return torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode="min",
-            factor=float(train_cfg.get("scheduler_factor", 0.5)),
-            patience=int(train_cfg.get("scheduler_patience", 10)),
-            min_lr=float(train_cfg.get("scheduler_min_lr", 1.0e-5)),
-        )
-    raise ValueError(f"Unknown scheduler: {name}")
-
-
 def train(config: dict) -> None:
     """Train the configured model and retain the lowest-validation-loss checkpoint."""
-    root = project_dir()
-    seed_everything(int(config.get("seed", 42)))
-    device = get_device(config.get("device", "auto"))
+    seed_everything(config["seed"])
+    device = get_device(config["device"])
     train_loader, val_loader, _, _ = make_loaders(config, recompute_stats=True)
     model = build_model(config).to(device)
     train_cfg = config["train"]
-    loss_fn = build_loss(str(train_cfg.get("loss", "huber")))
+    loss_fn = build_loss(train_cfg["loss"])
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=float(train_cfg.get("lr", 3.0e-4)),
-        weight_decay=float(train_cfg.get("weight_decay", 0.0)),
+        lr=train_cfg["lr"],
+        weight_decay=train_cfg["weight_decay"],
     )
-    scheduler = build_scheduler(train_cfg, optimizer)
-    checkpoint_path = resolve(root, train_cfg["checkpoint"])
-    history_path = resolve(root, train_cfg["history_csv"])
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        factor=train_cfg["scheduler_factor"],
+        patience=train_cfg["scheduler_patience"],
+        min_lr=train_cfg["scheduler_min_lr"],
+    )
+    checkpoint_path = PROJECT_ROOT / train_cfg["checkpoint"]
+    history_path = PROJECT_ROOT / train_cfg["history_csv"]
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+
     best_val = float("inf")
     stale_epochs = 0
-    patience = int(train_cfg.get("patience", 20))
-    smooth_weight = float(train_cfg.get("latent_smooth_weight", 0.0))
-    corr_weight = float(train_cfg.get("latent_corr_weight", 0.0))
+    patience = train_cfg["patience"]
 
-    for epoch in range(1, int(train_cfg.get("epochs", 250)) + 1):
-        train_stats = train_epoch(
-            model,
-            train_loader,
-            optimizer,
-            loss_fn,
-            device,
-            smooth_weight=smooth_weight,
-            corr_weight=corr_weight,
-            clip_norm=float(train_cfg.get("gradient_clip_norm", 0.0)),
-        )
+    for epoch in range(1, train_cfg["epochs"] + 1):
+        train_loss = train_epoch(model, train_loader, optimizer, loss_fn, device)
         train_eval = evaluate_metrics(model, train_loader, loss_fn, device)
         val_stats = evaluate_metrics(model, val_loader, loss_fn, device)
+
         row = {
             "epoch": epoch,
             "lr": float(optimizer.param_groups[0]["lr"]),
-            "train_loss": train_stats["loss"],
-            "train_pred_loss": train_stats["pred_loss"],
+            "train_loss": train_loss,
             "train_mse": train_eval["mse"],
             "train_mae": train_eval["mae"],
             "train_r2": train_eval["r2"],
@@ -142,10 +100,11 @@ def train(config: dict) -> None:
         print(
             f"epoch={epoch} train_r2={train_eval['r2']:.4f} "
             f"val_r2={val_stats['r2']:.4f} "
-            f"train_loss={train_stats['loss']:.6g} "
+            f"train_loss={train_loss:.6g} "
             f"val_loss={val_stats['loss']:.6g}",
             flush=True,
         )
+
         if val_stats["loss"] < best_val:
             best_val = val_stats["loss"]
             stale_epochs = 0
@@ -166,5 +125,5 @@ def train(config: dict) -> None:
                     flush=True,
                 )
                 break
-        if scheduler is not None:
-            scheduler.step(val_stats["loss"])
+
+        scheduler.step(val_stats["loss"])

@@ -7,7 +7,7 @@ import csv
 import numpy as np
 import torch
 
-from .config import project_dir, resolve
+from .config import PROJECT_ROOT
 from .data import NormStats, make_loaders
 from .losses import build_loss
 from .metrics import r2_score
@@ -54,12 +54,14 @@ def denormalize_y(values: np.ndarray, stats: NormStats) -> np.ndarray:
 
 def evaluate(config: dict) -> None:
     """Evaluate the best checkpoint and save test predictions and metrics."""
-    root = project_dir()
     seed_everything(int(config.get("seed", 42)))
     device = get_device(config.get("device", "auto"))
     _, val_loader, test_loader, stats = make_loaders(config)
     model = build_model(config).to(device)
-    checkpoint = torch.load(resolve(root, config["train"]["checkpoint"]), map_location=device)
+    checkpoint = torch.load(
+        PROJECT_ROOT / config["train"]["checkpoint"],
+        map_location=device,
+    )
     model.load_state_dict(checkpoint["model_state"])
     loss_fn = build_loss(str(config["train"].get("loss", "huber")))
     val_metrics = evaluate_metrics(model, val_loader, loss_fn, device)
@@ -85,15 +87,9 @@ def evaluate(config: dict) -> None:
     mae = np.mean(np.abs(prediction - target), axis=(1, 2, 3))
     sample_indices = np.asarray(test_loader.dataset.indices, dtype=np.int64)
 
-    prediction_path = resolve(root, config["output"]["predictions"])
-    r2_path = resolve(root, config["output"]["r2_series"])
-    summary_path = resolve(
-        root,
-        config["output"].get(
-            "summary",
-            "analysis/temporal_bottleneck/outputs/evaluation_summary.txt",
-        ),
-    )
+    prediction_path = PROJECT_ROOT / config["output"]["predictions"]
+    r2_path = PROJECT_ROOT / config["output"]["r2_series"]
+    summary_path = PROJECT_ROOT / config["output"]["summary"]
     prediction_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         prediction_path,
@@ -108,23 +104,11 @@ def evaluate(config: dict) -> None:
         val_r2=np.asarray(val_metrics["r2"]),
     )
     with r2_path.open("w", newline="") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=["test_position", "sample_index", "r2", "mse", "mae"],
+        writer = csv.writer(handle)
+        writer.writerow(["test_position", "sample_index", "r2", "mse", "mae"])
+        writer.writerows(
+            zip(range(len(sample_indices)), sample_indices, sample_r2, mse, mae)
         )
-        writer.writeheader()
-        for position, (index, sample_r2_value, sample_mse, sample_mae) in enumerate(
-            zip(sample_indices, sample_r2, mse, mae)
-        ):
-            writer.writerow(
-                {
-                    "test_position": position,
-                    "sample_index": int(index),
-                    "r2": float(sample_r2_value),
-                    "mse": float(sample_mse),
-                    "mae": float(sample_mae),
-                }
-            )
     summary = {
         "val_r2": val_metrics["r2"],
         "val_mse": val_metrics["mse"],
@@ -136,8 +120,7 @@ def evaluate(config: dict) -> None:
     }
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     with summary_path.open("w") as handle:
-        for key, value in summary.items():
-            handle.write(f"{key}: {value}\n")
+        handle.write("\n".join(f"{key}: {value}" for key, value in summary.items()) + "\n")
     print(
         {key: round(value, 8) for key, value in summary.items() if isinstance(value, float)},
         flush=True,
