@@ -10,6 +10,7 @@ data/**
 check_point/
 runs/
 scratch/
+results/model_test/
 *.npy
 *.npz
 *.csv
