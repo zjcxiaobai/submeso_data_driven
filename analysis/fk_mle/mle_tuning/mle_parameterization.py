@@ -112,7 +112,7 @@ def mld_integrals_for_MEI(
     return int_x, int_y
 
 
-def compute_Lf_MEI(
+def compute_MEI(
     dBuoyX_Hu: xr.DataArray,
     dBuoyY_Hv: xr.DataArray,
     b: xr.DataArray,
@@ -169,7 +169,7 @@ def compute_Lf_MEI(
     return lf_center, lf_u, lf_v
 
 
-def compute_fk_submeso_heat_flux_one_time(
+def compute_mle_submeso_heat_flux_one_time(
     *,
     time_index: int,
     ds_grid: xr.Dataset,
@@ -201,7 +201,7 @@ def compute_fk_submeso_heat_flux_one_time(
     f_u = grid.interp(f_eff, "X", to="left")
     f_v = grid.interp(f_eff, "Y", to="left")
 
-    _, lf_u, lf_v = compute_Lf_MEI(
+    _, lf_u, lf_v = compute_MEI(
         dBuoyX_Hu=d_buoy_x_hu,
         dBuoyY_Hv=d_buoy_y_hv,
         b=b,

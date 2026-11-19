@@ -1,7 +1,7 @@
 seed: 42
 
 data:
-  y_path: analysis/model_analysis/data/y.npy
+  y_path: data/processed/upper/y.npy
   split:
     train: 0.8
     val: 0.1

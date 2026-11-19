@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Random-search LfMin using a fixed tuned C_e on the training split.
 
-LfMin changes the FK physics, so each candidate needs its own C_e=1 basis.
+LfMin changes the MLE calculation, so each candidate needs its own C_e=1 basis.
 This script is resumable: rerun the same command and it continues the current
 LfMin basis before scoring and moving to the next candidate.
 """
@@ -13,25 +13,23 @@ import csv
 from pathlib import Path
 from types import SimpleNamespace
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import numpy as np
 
-from submeso_data_driven.analysis.fk_mle.upper_40x20.tune_ce_random_search import (
+from tune_ce_random_search import (
     ANALYSIS_DIR,
-    FK_TUNING_DIR,
+    CASE_DIR,
+    MLE_INPUT_DIR,
     PROJECT_DIR,
     align_train_samples,
     build_ce1_basis,
     load_config,
     load_fk_input_times,
     load_truth,
-    overall_r2,
     per_snapshot_r2,
     submesofluxnet_train_indices,
 )
 
-OUT_DIR = ANALYSIS_DIR / "LfMin_test"
+OUT_DIR = CASE_DIR
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,20 +42,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sampling", choices=("log", "linear"), default="log")
     parser.add_argument("--basis-batch-size", type=int, default=50, help="Compute at most this many missing snapshots per run for the active LfMin.")
     parser.add_argument("--max-train-snapshots", type=int, default=None)
-    parser.add_argument("--config", type=Path, default=ANALYSIS_DIR / "config_mld_rho_split.yaml")
-    parser.add_argument("--fk-inputs", type=Path, default=FK_TUNING_DIR / "fk_input_trimmed.npz")
-    parser.add_argument("--truth", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/y.npy")
-    parser.add_argument("--time-source", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/time_index.npy")
+    parser.add_argument("--config", type=Path, default=ANALYSIS_DIR / "config.yaml")
+    parser.add_argument("--fk-inputs", type=Path, default=MLE_INPUT_DIR / "fk_input_trimmed.npz")
+    parser.add_argument("--truth", type=Path, default=PROJECT_DIR / "data/processed/upper/y.npy")
+    parser.add_argument("--time-source", type=Path, default=PROJECT_DIR / "data/processed/upper/time_index.npy")
     parser.add_argument("--grid-run-dir", type=Path, default=Path("/scratch/jczhang/MITgcm_BI/verification/tutorial_reentrant_channel/run"))
     parser.add_argument("--box-j", type=int, default=10)
     parser.add_argument("--box-i", type=int, default=10)
     parser.add_argument("--crop", type=int, nargs=4, default=(92, 112, 12, 52), metavar=("J0", "J1", "I0", "I1"))
     parser.add_argument("--submeso-lmax", type=float, default=2751.0)
     parser.add_argument("--submeso-inv-tau", type=float, default=2.0e-6)
-    parser.add_argument("--trials-csv", type=Path, default=OUT_DIR / "lfmin_random_search_trials.csv")
-    parser.add_argument("--history-csv", type=Path, default=OUT_DIR / "lfmin_random_search_history.csv")
-    parser.add_argument("--summary-output", type=Path, default=OUT_DIR / "lfmin_random_search_summary.txt")
-    parser.add_argument("--plot-output", type=Path, default=OUT_DIR / "lfmin_random_search_r2.png")
+    parser.add_argument("--history-csv", type=Path, default=OUT_DIR / "lfmin_tuning.csv")
     return parser.parse_args()
 
 
@@ -69,28 +64,13 @@ def lfmin_tag(value: float) -> str:
 
 
 def make_trials(args: argparse.Namespace) -> np.ndarray:
-    if args.trials_csv.exists():
-        values = []
-        with args.trials_csv.open("r", newline="") as handle:
-            reader = csv.DictReader(handle)
-            for row in reader:
-                values.append(float(row["LfMin"]))
-        return np.asarray(values, dtype=np.float64)
-
     rng = np.random.default_rng(args.seed)
     if args.sampling == "log":
         raw = np.exp(rng.uniform(np.log(args.lfmin_min), np.log(args.lfmin_max), size=args.n_trials))
     else:
         raw = rng.uniform(args.lfmin_min, args.lfmin_max, size=args.n_trials)
 
-    values = np.unique(np.rint(np.concatenate([raw, np.asarray([1000.0])])).astype(np.int64)).astype(np.float64)
-    args.trials_csv.parent.mkdir(parents=True, exist_ok=True)
-    with args.trials_csv.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["trial", "LfMin"])
-        writer.writeheader()
-        for trial, value in enumerate(values):
-            writer.writerow({"trial": trial, "LfMin": float(value)})
-    return values
+    return np.unique(np.rint(np.append(raw, 1000.0))).astype(np.float64)
 
 
 def load_history(path: Path) -> dict[float, dict[str, float | int]]:
@@ -106,10 +86,6 @@ def load_history(path: Path) -> dict[float, dict[str, float | int]]:
                 "C_e": float(row["C_e"]),
                 "n_snapshots": int(row["n_snapshots"]),
                 "mean_per_snapshot_r2": float(row["mean_per_snapshot_r2"]),
-                "median_per_snapshot_r2": float(row["median_per_snapshot_r2"]),
-                "overall_r2": float(row["overall_r2"]),
-                "mae": float(row["mae"]),
-                "rmse": float(row["rmse"]),
             }
     return rows
 
@@ -121,7 +97,7 @@ def write_history(path: Path, rows_by_lfmin: dict[float, dict[str, float | int]]
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["rank", "LfMin", "C_e", "n_snapshots", "mean_per_snapshot_r2", "median_per_snapshot_r2", "overall_r2", "mae", "rmse"],
+            fieldnames=["rank", "LfMin", "C_e", "n_snapshots", "mean_per_snapshot_r2"],
         )
         writer.writeheader()
         for rank, row in enumerate(rows, start=1):
@@ -129,58 +105,6 @@ def write_history(path: Path, rows_by_lfmin: dict[float, dict[str, float | int]]
             out["rank"] = rank
             writer.writerow(out)
     return rows
-
-
-def write_summary(path: Path, args: argparse.Namespace, sample_index: np.ndarray, time_index: np.ndarray, rows: list[dict[str, float | int]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as handle:
-        handle.write("FK LfMin random search with fixed tuned C_e\n")
-        handle.write(f"C_e: {args.c_e:.10g}\n")
-        handle.write(f"LfMin range: {args.lfmin_min:.10g}-{args.lfmin_max:.10g}\n")
-        handle.write(f"sampling: {args.sampling}\n")
-        handle.write(f"n_trials_requested: {args.n_trials}\n")
-        handle.write(f"n_completed_trials: {len(rows)}\n")
-        handle.write(f"n_aligned_train_snapshots: {sample_index.size}\n")
-        handle.write(f"sample_index_range: {int(sample_index.min())}-{int(sample_index.max())}\n")
-        handle.write(f"time_index_range: {int(time_index.min())}-{int(time_index.max())}\n")
-        if rows:
-            best = rows[0]
-            handle.write("\nBest by mean per-snapshot R2\n")
-            for key in ("LfMin", "C_e", "n_snapshots", "mean_per_snapshot_r2", "median_per_snapshot_r2", "overall_r2", "mae", "rmse"):
-                value = best[key]
-                if isinstance(value, int):
-                    handle.write(f"{key}: {value}\n")
-                else:
-                    handle.write(f"{key}: {float(value):.10g}\n")
-
-
-def plot_history(path: Path, rows: list[dict[str, float | int]]) -> None:
-    if not rows:
-        return
-    mpl.rcParams.update({"font.size": 7, "axes.spines.right": False, "axes.spines.top": False})
-    lfmin = np.asarray([float(row["LfMin"]) for row in rows])
-    r2 = np.asarray([float(row["mean_per_snapshot_r2"]) for row in rows])
-    best = rows[0]
-    fig, ax = plt.subplots(figsize=(3.2, 2.3), constrained_layout=True)
-    ax.scatter(lfmin, r2, s=14, color="#4A6F8A", alpha=0.75, linewidths=0)
-    ax.scatter([float(best["LfMin"])], [float(best["mean_per_snapshot_r2"])], s=70, marker="*", color="#B64A3B", zorder=3)
-    ax.set_xscale("log")
-    ax.set_xlabel(r"$L_{f,min}$ (m)")
-    ax.set_ylabel(r"Mean training $R^2$")
-    ax.set_title(r"FK $L_{f,min}$ random search", fontsize=7.5, pad=4)
-    ax.grid(color="#D6D6D6", linewidth=0.4, alpha=0.55)
-    ax.text(
-        0.03,
-        0.96,
-        fr"best $L_{{f,min}}$={float(best['LfMin']):.0f} m\nmean $R^2$={float(best['mean_per_snapshot_r2']):.3f}",
-        transform=ax.transAxes,
-        ha="left",
-        va="top",
-        fontsize=6.5,
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=600, bbox_inches="tight")
-    plt.close(fig)
 
 
 def basis_args(args: argparse.Namespace, lfmin: float, basis_output: Path) -> SimpleNamespace:
@@ -218,7 +142,7 @@ def main() -> None:
         if lfmin in completed:
             continue
         tag = lfmin_tag(lfmin)
-        basis_output = OUT_DIR / f"fk_train_lfmin{tag}_ce1_basis.npz"
+        basis_output = OUT_DIR / f"lfmin_{tag}_basis.npz"
         print(f"\nLfMin={lfmin:.0f} m, basis={basis_output}", flush=True)
         basis_sample, basis_time, basis_flux = build_ce1_basis(basis_args(args, lfmin, basis_output), sample_index, time_index)
         if basis_time.size < sample_index.size:
@@ -237,23 +161,13 @@ def main() -> None:
             "C_e": float(args.c_e),
             "n_snapshots": int(basis_time.size),
             "mean_per_snapshot_r2": float(np.nanmean(r2_series)),
-            "median_per_snapshot_r2": float(np.nanmedian(r2_series)),
-            "overall_r2": float(overall_r2(pred, truth)),
-            "mae": float(np.nanmean(np.abs(pred - truth))),
-            "rmse": float(np.sqrt(np.nanmean((pred - truth) ** 2))),
         }
         rows = write_history(args.history_csv, rows_by_lfmin)
-        write_summary(args.summary_output, args, sample_index, time_index, rows)
-        plot_history(args.plot_output, rows)
         best = rows[0]
         print(f"Scored LfMin={lfmin:.0f}; current best LfMin={float(best['LfMin']):.0f}, mean R2={float(best['mean_per_snapshot_r2']):.6f}", flush=True)
 
     rows = write_history(args.history_csv, rows_by_lfmin) if rows_by_lfmin else []
-    write_summary(args.summary_output, args, sample_index, time_index, rows)
-    plot_history(args.plot_output, rows)
-    print(f"Saved {args.trials_csv}", flush=True)
     print(f"Saved {args.history_csv}", flush=True)
-    print(f"Saved {args.summary_output}", flush=True)
     if rows:
         print(f"Best LfMin so far: {float(rows[0]['LfMin']):.0f} m", flush=True)
 

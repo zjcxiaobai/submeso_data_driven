@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Tune FK C_e on the SubmesoFluxNet training samples.
+"""Tune MLE C_e on the SubmesoFluxNet training samples.
 
-The FK heat flux is linear in C_e when LfMin, invTau, and Lmax are fixed. This
-script therefore computes a reusable C_e=1 FK basis on the same training samples
-used by the no-shuffle SubmesoFluxNet configuration, then random-searches C_e by
+The MLE heat flux is linear in C_e when LfMin, invTau, and Lmax are fixed. This
+script therefore computes a reusable C_e=1 basis on the training samples
+specified in config.yaml, then random-searches C_e by
 scaling that basis and maximizing mean per-snapshot R2.
 """
 
@@ -12,12 +12,8 @@ from __future__ import annotations
 import argparse
 import csv
 import os
-import sys
-import zipfile
 from pathlib import Path
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import numpy as np
 from submeso_data_driven.utils import build_coarse_grid, read_mitgcm
 import xarray as xr
@@ -25,27 +21,20 @@ import yaml
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[3]
-REPO_ROOT = PROJECT_DIR.parent
-ANALYSIS_DIR = PROJECT_DIR / "analysis/fk_mle/upper_40x20"
-CASE_DIR = ANALYSIS_DIR / "Ce_base_case_calculation"
-PER_SNAPSHOT_DIR = PROJECT_DIR / "analysis/per_snapshot_r2_time_series"
-FK_TUNING_DIR = REPO_ROOT / "src/post_analysis/00_FK_Ce_LfMin_Tuning"
+ANALYSIS_DIR = Path(__file__).resolve().parent
+CASE_DIR = PROJECT_DIR / "results/analysis_outputs/fk_mle/mle_tuning"
+MLE_INPUT_DIR = PROJECT_DIR / "data/interim/fk_mle"
 
-if str(PER_SNAPSHOT_DIR) not in sys.path:
-    sys.path.insert(0, str(PER_SNAPSHOT_DIR))
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from submeso_data_driven.analysis.fk_mle.upper_40x20.fk_physics import compute_fk_submeso_heat_flux_one_time  # noqa: E402
-from submeso_data_driven.utils import make_grid  # noqa: E402
+from mle_parameterization import compute_mle_submeso_heat_flux_one_time
+from submeso_data_driven.utils import make_grid
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=ANALYSIS_DIR / "config_mld_rho_split.yaml")
-    parser.add_argument("--fk-inputs", type=Path, default=FK_TUNING_DIR / "fk_input_trimmed.npz")
-    parser.add_argument("--truth", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/y.npy")
-    parser.add_argument("--time-source", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/time_index.npy")
+    parser.add_argument("--config", type=Path, default=ANALYSIS_DIR / "config.yaml")
+    parser.add_argument("--fk-inputs", type=Path, default=MLE_INPUT_DIR / "fk_input_trimmed.npz")
+    parser.add_argument("--truth", type=Path, default=PROJECT_DIR / "data/processed/upper/y.npy")
+    parser.add_argument("--time-source", type=Path, default=PROJECT_DIR / "data/processed/upper/time_index.npy")
     parser.add_argument(
         "--grid-run-dir",
         type=Path,
@@ -86,12 +75,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--basis-output",
         type=Path,
-        default=CASE_DIR / "fk_train_ce1_basis.npz",
-        help="Reusable C_e=1 FK basis. Existing snapshots are reused.",
+        default=CASE_DIR / "ce_basis.npz",
+        help="Reusable C_e=1 MLE basis. Existing snapshots are reused.",
     )
-    parser.add_argument("--history-csv", type=Path, default=CASE_DIR / "ce_random_search_history.csv")
-    parser.add_argument("--summary-output", type=Path, default=CASE_DIR / "ce_random_search_summary.txt")
-    parser.add_argument("--plot-output", type=Path, default=CASE_DIR / "ce_random_search_r2.png")
+    parser.add_argument("--history-csv", type=Path, default=CASE_DIR / "ce_tuning.csv")
     return parser.parse_args()
 
 
@@ -175,7 +162,7 @@ def align_train_samples(
     fk_times = set(map(int, fk_input_time))
     keep = np.asarray([n for n, t in enumerate(train_time) if int(t) in fk_times], dtype=np.int64)
     if keep.size == 0:
-        raise ValueError("No SubmesoFluxNet train samples overlap the FK input cache.")
+        raise ValueError("No SubmesoFluxNet train samples overlap the MLE input cache.")
     if max_snapshots is not None:
         keep = keep[:max_snapshots]
     return train_sample_index[keep], train_time[keep]
@@ -231,18 +218,8 @@ def make_dataarrays(fk_inputs: np.lib.npyio.NpzFile, ds_coarse: xr.Dataset) -> t
 def load_basis(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     if not path.exists():
         return None
-    try:
-        z = np.load(path)
+    with np.load(path) as z:
         return z["sample_index"].astype(np.int64), z["time_index"].astype(np.int64), z["basis_flux"].astype(np.float32)
-    except (zipfile.BadZipFile, EOFError, KeyError, ValueError) as exc:
-        bad_path = path.with_suffix(path.suffix + ".bad")
-        counter = 1
-        while bad_path.exists():
-            bad_path = path.with_suffix(path.suffix + f".bad{counter}")
-            counter += 1
-        path.rename(bad_path)
-        print(f"Warning: moved unreadable basis file to {bad_path}: {exc}", flush=True)
-        return None
 
 
 def save_basis(path: Path, sample_index: np.ndarray, time_index: np.ndarray, basis_flux: np.ndarray) -> None:
@@ -340,21 +317,10 @@ def per_snapshot_r2(pred: np.ndarray, truth: np.ndarray) -> np.ndarray:
     return out
 
 
-def overall_r2(pred: np.ndarray, truth: np.ndarray) -> float:
-    valid = np.isfinite(pred) & np.isfinite(truth)
-    if not np.any(valid):
-        return float("nan")
-    p = pred[valid]
-    y = truth[valid]
-    sse = float(np.sum((p - y) ** 2))
-    sst = float(np.sum((y - np.mean(y)) ** 2))
-    return 1.0 - sse / sst if sst > 0.0 else float("nan")
-
-
 def random_search_ce(args: argparse.Namespace, basis_flux: np.ndarray, truth: np.ndarray) -> list[dict[str, float | int]]:
     rng = np.random.default_rng(args.seed)
     ce_values = rng.uniform(args.ce_min, args.ce_max, size=args.n_trials)
-    # Include endpoints and common FK values so random search does not miss them.
+    # Include endpoints and commonly used values.
     ce_values = np.concatenate([np.asarray([args.ce_min, args.ce_max, 0.1477, 0.15, 1.0]), ce_values])
 
     rows: list[dict[str, float | int]] = []
@@ -365,10 +331,6 @@ def random_search_ce(args: argparse.Namespace, basis_flux: np.ndarray, truth: np
             "trial": int(trial),
             "C_e": float(ce),
             "mean_per_snapshot_r2": float(np.nanmean(r2_series)),
-            "median_per_snapshot_r2": float(np.nanmedian(r2_series)),
-            "overall_r2": float(overall_r2(pred, truth)),
-            "mae": float(np.nanmean(np.abs(pred - truth))),
-            "rmse": float(np.sqrt(np.nanmean((pred - truth) ** 2))),
         }
         rows.append(row)
     rows.sort(key=lambda row: float(row["mean_per_snapshot_r2"]), reverse=True)
@@ -385,10 +347,6 @@ def write_history(path: Path, rows: list[dict[str, float | int]]) -> None:
                 "trial",
                 "C_e",
                 "mean_per_snapshot_r2",
-                "median_per_snapshot_r2",
-                "overall_r2",
-                "mae",
-                "rmse",
             ],
         )
         writer.writeheader()
@@ -396,65 +354,6 @@ def write_history(path: Path, rows: list[dict[str, float | int]]) -> None:
             out = dict(row)
             out["rank"] = rank
             writer.writerow(out)
-
-
-def write_summary(path: Path, args: argparse.Namespace, sample_index: np.ndarray, time_index: np.ndarray, rows: list[dict[str, float | int]]) -> None:
-    best = rows[0]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as handle:
-        handle.write("FK C_e random-search tuning on SubmesoFluxNet training samples\n")
-        handle.write(f"config: {args.config}\n")
-        handle.write(f"fk_inputs: {args.fk_inputs}\n")
-        handle.write(f"truth: {args.truth}\n")
-        handle.write(f"n_aligned_train_snapshots: {sample_index.size}\n")
-        handle.write(f"sample_index_range: {int(sample_index.min())}-{int(sample_index.max())}\n")
-        handle.write(f"time_index_range: {int(time_index.min())}-{int(time_index.max())}\n")
-        handle.write(f"ce_range: {args.ce_min}-{args.ce_max}\n")
-        handle.write(f"n_trials_random: {args.n_trials}\n")
-        handle.write(f"lf_min: {args.lf_min}\n")
-        handle.write(f"submeso_lmax: {args.submeso_lmax}\n")
-        handle.write(f"submeso_inv_tau: {args.submeso_inv_tau}\n")
-        handle.write("\nBest by mean per-snapshot R2\n")
-        for key in ("C_e", "mean_per_snapshot_r2", "median_per_snapshot_r2", "overall_r2", "mae", "rmse"):
-            handle.write(f"{key}: {float(best[key]):.10g}\n")
-
-
-def plot_history(path: Path, rows: list[dict[str, float | int]]) -> None:
-    mpl.rcParams.update(
-        {
-            "font.family": "sans-serif",
-            "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "sans-serif"],
-            "svg.fonttype": "none",
-            "pdf.fonttype": 42,
-            "font.size": 7,
-            "axes.spines.right": False,
-            "axes.spines.top": False,
-        }
-    )
-    ce = np.asarray([float(row["C_e"]) for row in rows], dtype=np.float64)
-    r2 = np.asarray([float(row["mean_per_snapshot_r2"]) for row in rows], dtype=np.float64)
-    best = rows[0]
-
-    fig, ax = plt.subplots(figsize=(3.2, 2.3), constrained_layout=True)
-    ax.scatter(ce, r2, s=12, color="#4A6F8A", alpha=0.72, linewidths=0)
-    ax.scatter([float(best["C_e"])], [float(best["mean_per_snapshot_r2"])], s=70, marker="*", color="#B64A3B", zorder=3)
-    ax.set_xlabel(r"$C_e$")
-    ax.set_ylabel(r"Mean per-snapshot $R^2$")
-    ax.set_title(r"FK $C_e$ random search", fontsize=7.5, pad=4)
-    ax.grid(color="#D6D6D6", linewidth=0.4, alpha=0.55)
-    ax.text(
-        0.03,
-        0.96,
-        fr"best $C_e$={float(best['C_e']):.4f}" "\n" fr"mean $R^2$={float(best['mean_per_snapshot_r2']):.3f}",
-        transform=ax.transAxes,
-        ha="left",
-        va="top",
-        fontsize=6.5,
-        color="#343434",
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=600, bbox_inches="tight")
-    plt.close(fig)
 
 
 def report_basis_status(path: Path, target_time: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
@@ -484,7 +383,7 @@ def main() -> None:
     sample_index, time_index = align_train_samples(train_sample_all, truth_time, fk_input_time, args.max_train_snapshots)
 
     print(f"SubmesoFluxNet train samples: {train_sample_all.size}", flush=True)
-    print(f"Overlapping FK-input train samples: {sample_index.size}", flush=True)
+    print(f"Overlapping MLE-input train samples: {sample_index.size}", flush=True)
     print(f"sample_index range: {int(sample_index.min())} ... {int(sample_index.max())}", flush=True)
     print(f"time_index range: {int(time_index.min())} ... {int(time_index.max())}", flush=True)
 
@@ -513,17 +412,12 @@ def main() -> None:
 
     rows = random_search_ce(args, basis_flux.astype(np.float64), truth.astype(np.float64))
     write_history(args.history_csv, rows)
-    write_summary(args.summary_output, args, basis_sample, basis_time, rows)
-    plot_history(args.plot_output, rows)
 
     best = rows[0]
     print("Best C_e tuning result:", flush=True)
     print(f"  C_e = {float(best['C_e']):.8f}", flush=True)
     print(f"  mean per-snapshot R2 = {float(best['mean_per_snapshot_r2']):.8f}", flush=True)
-    print(f"  overall R2 = {float(best['overall_r2']):.8f}", flush=True)
     print(f"Saved {args.history_csv}", flush=True)
-    print(f"Saved {args.summary_output}", flush=True)
-    print(f"Saved {args.plot_output}", flush=True)
 
 
 if __name__ == "__main__":
