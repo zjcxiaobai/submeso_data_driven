@@ -3,15 +3,22 @@
 
 from __future__ import annotations
 
-import argparse
-import json
 import sys
-from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import matplotlib
 
-from submeso_data_driven.utils import coarsen_UVWTS, read_mitgcm
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_DIR.parent))
+
+from submeso_data_driven.utils import (  # noqa: E402
+    build_coarse_grid,
+    coarsen_UVWTS,
+    read_mitgcm,
+)
+from submeso_data_driven.utils.wT_submeso import (  # noqa: E402
+    submeso_vertical_heat_flux,
+)
 
 matplotlib.use("Agg")
 import matplotlib as mpl
@@ -22,87 +29,25 @@ from matplotlib.colors import TwoSlopeNorm
 from matplotlib.patches import Rectangle
 
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
-REPO_DIR = PROJECT_DIR.parent
-if str(REPO_DIR) not in sys.path:
-    sys.path.insert(0, str(REPO_DIR))
-
-from submeso_data_driven.utils import build_coarse_grid  # noqa: E402
-from submeso_data_driven.utils.wT_submeso import submeso_vertical_heat_flux  # noqa: E402
-
-
-HERE = Path(__file__).resolve().parent
-DEFAULT_RUN_DIR = Path(
+RUN_DIR = Path(
     "/scratch/jczhang/MITgcm_BI/"
     "verification/tutorial_reentrant_channel/run"
 )
-
-
-@dataclass(frozen=True)
-class CoarseDomain:
-    name: str
-    j_start: int
-    j_stop: int
-    i_start: int
-    i_stop: int
-    color: str
-
-
-DOMAINS_56 = (
-    CoarseDomain("analysis: upper 40x20", 30, 50, 10, 50, "#D95F02"),
-    CoarseDomain("evaluation: lower 40x20", 10, 30, 10, 50, "#1B9E77"),
+OUTPUT_PATH = (
+    PROJECT_DIR / "results/analysis_outputs/ocean_simulation/diagnostics.png"
 )
+ITERATION = 26687088
+K_INDEX = 2
+BOX_SIZE = 10
+ROBUST_PERCENTILE = 99.0
+BATHY_STRIDE = 4
+DPI = 600
 
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Build a three-column paper figure from direct MITgcm output: "
-            "left-column 3D bathymetry, northern-half temperature/submesoscale "
-            "heat flux, and upper/lower 40x20 analysis domains."
-        )
-    )
-    parser.add_argument("--run-dir", type=Path, default=DEFAULT_RUN_DIR)
-    parser.add_argument("--iteration", type=int, default=26687088)
-    parser.add_argument("--k-index", type=int, default=2, help="Vertical center index plotted.")
-    parser.add_argument("--box-j", type=int, default=10, help="Fine cells per coarse cell in y.")
-    parser.add_argument("--box-i", type=int, default=10, help="Fine cells per coarse cell in x.")
-    parser.add_argument("--bathy-stride", type=int, default=4, help="Subsample stride for the 3D bathymetry surface.")
-    parser.add_argument(
-        "--ml-j-origin",
-        type=int,
-        default=0,
-        help=(
-            "Coarse-grid j index of the 56x56 ML crop. Defaults to 0 because "
-            "the train_on_small_domain metadata stores only indices within that crop."
-        ),
-    )
-    parser.add_argument(
-        "--ml-i-origin",
-        type=int,
-        default=0,
-        help="Coarse-grid i index of the 56x56 ML crop.",
-    )
-    parser.add_argument(
-        "--flux-abs-limit",
-        type=float,
-        default=None,
-        help="Optional symmetric heat-flux color limit in W m-2.",
-    )
-    parser.add_argument(
-        "--robust-percentile",
-        type=float,
-        default=99.0,
-        help="Percentile used for robust color limits when explicit limits are omitted.",
-    )
-    parser.add_argument(
-        "--output-prefix",
-        type=Path,
-        default=HERE / "dynamics_snapshot",
-        help="Output prefix; .png and .json summary are written.",
-    )
-    parser.add_argument("--dpi", type=int, default=600)
-    return parser.parse_args()
+# title, j_start, j_stop, i_start, i_stop within the 56x56 crop
+DOMAINS = (
+    ("Training subdomain", 30, 50, 10, 50),
+    ("Evaluation subdomain", 10, 30, 10, 50),
+)
 
 
 def apply_style() -> None:
@@ -297,106 +242,12 @@ def plot_field(
     return image
 
 
-def plot_domain_panel(
-    ax: plt.Axes,
-    coarse_grid: xr.Dataset,
-    *,
-    ml_j_origin: int,
-    ml_i_origin: int,
-) -> list[dict[str, object]]:
-    land = np.asarray(coarse_grid["hFacC"].isel(k=0) <= 0)
-    x = coarse_grid["XC"]
-    y = coarse_grid["YC"]
-    extent = km_extent_from_grid(x, y)
-    ax.imshow(
-        np.where(land, 0.86, 1.0),
-        origin="lower",
-        extent=extent,
-        cmap="gray",
-        vmin=0.0,
-        vmax=1.0,
-        interpolation="nearest",
-        aspect="equal",
-    )
-
-    nx = coarse_grid.sizes["i"]
-    ny = coarse_grid.sizes["j"]
-    dx = (float(x.max()) - float(x.min())) / max(nx - 1, 1) / 1000.0
-    dy = (float(y.max()) - float(y.min())) / max(ny - 1, 1) / 1000.0
-    x0 = float(x.min()) / 1000.0
-    y0 = float(y.min()) / 1000.0
-
-    ml_rect = Rectangle(
-        (x0 + ml_i_origin * dx, y0 + ml_j_origin * dy),
-        56 * dx,
-        56 * dy,
-        fill=False,
-        edgecolor="#4D4D4D",
-        linewidth=1.0,
-        linestyle=":",
-    )
-    ax.add_patch(ml_rect)
-    ax.text(
-        x0 + ml_i_origin * dx + 1.5 * dx,
-        y0 + (ml_j_origin + 53) * dy,
-        "56x56 crop",
-        color="#333333",
-        fontsize=6.5,
-    )
-
-    domain_summary: list[dict[str, object]] = []
-    for domain in DOMAINS_56:
-        j_start = ml_j_origin + domain.j_start
-        i_start = ml_i_origin + domain.i_start
-        width = (domain.i_stop - domain.i_start) * dx
-        height = (domain.j_stop - domain.j_start) * dy
-        rect = Rectangle(
-            (x0 + i_start * dx, y0 + j_start * dy),
-            width,
-            height,
-            fill=False,
-            edgecolor=domain.color,
-            linewidth=1.35,
-        )
-        ax.add_patch(rect)
-        ax.text(
-            x0 + i_start * dx + 1.0 * dx,
-            y0 + (j_start + domain.j_stop - domain.j_start - 2) * dy,
-            domain.name,
-            color=domain.color,
-            fontsize=6.5,
-            weight="bold",
-        )
-        item = asdict(domain)
-        item.update(
-            coarse_j_start=j_start,
-            coarse_j_stop=ml_j_origin + domain.j_stop,
-            coarse_i_start=i_start,
-            coarse_i_stop=ml_i_origin + domain.i_stop,
-        )
-        domain_summary.append(item)
-
-    ax.set_xlim(extent[0], extent[1])
-    ax.set_ylim(extent[2], extent[3])
-    ax.set_xlabel("x (km)")
-    ax.set_ylabel("y (km)")
-    return domain_summary
-
-
 def plot_heat_flux_domain_crops(
     axes: tuple[plt.Axes, plt.Axes],
     heat_flux: xr.DataArray,
-    *,
-    ml_j_origin: int,
-    ml_i_origin: int,
     flux_limit: float,
-) -> list[dict[str, object]]:
-    summaries: list[dict[str, object]] = []
-    for ax, domain in zip(axes, DOMAINS_56):
-        j_start = ml_j_origin + domain.j_start
-        j_stop = ml_j_origin + domain.j_stop
-        i_start = ml_i_origin + domain.i_start
-        i_stop = ml_i_origin + domain.i_stop
+) -> None:
+    for ax, (title, j_start, j_stop, i_start, i_stop) in zip(axes, DOMAINS):
         crop = heat_flux.isel(j=slice(j_start, j_stop), i=slice(i_start, i_stop))
         ax.imshow(
             np.asarray(crop),
@@ -407,28 +258,13 @@ def plot_heat_flux_domain_crops(
             aspect="equal",
         )
         ax.set_axis_off()
-        title = "Training subdomain" if "analysis" in domain.name else "Evaluation subdomain"
         ax.set_title(title, fontsize=9, pad=8)
-        item = asdict(domain)
-        item.update(
-            source_panel="northern-half submesoscale heat flux",
-            crop_j_start=j_start,
-            crop_j_stop=j_stop,
-            crop_i_start=i_start,
-            crop_i_stop=i_stop,
-            plotted_field="submesoscale heat flux",
-        )
-        summaries.append(item)
-    return summaries
 
 
 def add_heat_flux_domain_boxes(
     ax: plt.Axes,
     x: xr.DataArray,
     y: xr.DataArray,
-    *,
-    ml_j_origin: int,
-    ml_i_origin: int,
 ) -> None:
     nx = x.sizes["i"]
     ny = y.sizes["j"]
@@ -436,11 +272,9 @@ def add_heat_flux_domain_boxes(
     dy = (float(y.max()) - float(y.min())) / max(ny - 1, 1) / 1000.0
     x0 = float(x.min()) / 1000.0
     y0 = float(y.min()) / 1000.0
-    for domain in DOMAINS_56:
-        j_start = ml_j_origin + domain.j_start
-        i_start = ml_i_origin + domain.i_start
-        width = (domain.i_stop - domain.i_start) * dx
-        height = (domain.j_stop - domain.j_start) * dy
+    for _, j_start, j_stop, i_start, i_stop in DOMAINS:
+        width = (i_stop - i_start) * dx
+        height = (j_stop - j_start) * dy
         rect = Rectangle(
             (x0 + i_start * dx, y0 + j_start * dy),
             width,
@@ -452,29 +286,30 @@ def add_heat_flux_domain_boxes(
         ax.add_patch(rect)
 
 
-def make_figure(args: argparse.Namespace) -> dict[str, object]:
-    run_dir = args.run_dir.expanduser().resolve()
-    output_prefix = args.output_prefix.expanduser().resolve()
-    output_prefix.parent.mkdir(parents=True, exist_ok=True)
+def make_figure() -> None:
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    grid, ocean, bathy = read_snapshot(RUN_DIR, ITERATION)
+    temp = select_k(ocean["T"], K_INDEX)
 
-    grid, ocean, bathy = read_snapshot(run_dir, args.iteration)
-    temp = select_k(ocean["T"], args.k_index)
-
-    coarse_grid, coarse_ocean = build_coarse_ocean(grid, ocean[["W", "T"]], args.box_j, args.box_i)
+    coarse_grid, coarse_ocean = build_coarse_ocean(
+        grid, ocean[["W", "T"]], BOX_SIZE, BOX_SIZE
+    )
     heat_flux = submeso_vertical_heat_flux(
         grid,
         coarse_grid,
         ocean[["W", "T"]],
         coarse_ocean,
-        box_j=args.box_j,
-        box_i=args.box_i,
+        box_j=BOX_SIZE,
+        box_i=BOX_SIZE,
         boundary_Z="fill",
         to_wm2=True,
         output="submeso_center",
-    ).isel(k=args.k_index)
+    ).isel(k=K_INDEX)
 
-    temp_vmin, temp_vmax = finite_limits(northern_half(temp), args.robust_percentile)
-    flux_limit = args.flux_abs_limit or finite_symmetric_limit(northern_half(heat_flux), args.robust_percentile, fallback=50.0)
+    temp_vmin, temp_vmax = finite_limits(northern_half(temp), ROBUST_PERCENTILE)
+    flux_limit = finite_symmetric_limit(
+        northern_half(heat_flux), ROBUST_PERCENTILE, fallback=50.0
+    )
 
     fig = plt.figure(figsize=(8.4, 4.4), constrained_layout=True)
     gs = fig.add_gridspec(2, 3, width_ratios=(1.75, 1.0, 0.72), height_ratios=(1, 1))
@@ -490,7 +325,9 @@ def make_figure(args: argparse.Namespace) -> dict[str, object]:
         coarse_grid["YC"].isel(j=slice(flux_north_j0, None)),
     )
     box_extent_km = (heat_flux_extent[0], heat_flux_extent[1], heat_flux_extent[2], heat_flux_extent[3])
-    plot_bathymetry_3d(ax_bathy, grid, bathy, args.bathy_stride, box_extent_km=box_extent_km)
+    plot_bathymetry_3d(
+        ax_bathy, grid, bathy, BATHY_STRIDE, box_extent_km=box_extent_km
+    )
     add_panel_label(ax_bathy, "a", x=0.02, y=0.86)
     ax_bathy.text2D(
         0.09,
@@ -531,75 +368,25 @@ def make_figure(args: argparse.Namespace) -> dict[str, object]:
         ax_flux,
         coarse_grid["XC"].isel(j=slice(coarse_grid.sizes["j"] // 2, None)),
         coarse_grid["YC"].isel(j=slice(coarse_grid.sizes["j"] // 2, None)),
-        ml_j_origin=args.ml_j_origin,
-        ml_i_origin=args.ml_i_origin,
     )
     add_panel_label(ax_flux, "c", x=-0.14, y=1.02)
     cbar = fig.colorbar(flux_image, ax=ax_flux, fraction=0.045, pad=0.02)
     cbar.set_label("W m$^{-2}$")
 
-    domain_summary = plot_heat_flux_domain_crops(
-        (ax_upper_flux, ax_lower_flux),
-        flux_north,
-        ml_j_origin=args.ml_j_origin,
-        ml_i_origin=args.ml_i_origin,
-        flux_limit=flux_limit,
+    plot_heat_flux_domain_crops(
+        (ax_upper_flux, ax_lower_flux), flux_north, flux_limit
     )
     add_panel_label(ax_upper_flux, "d", x=-0.16, y=1.02)
     add_panel_label(ax_lower_flux, "e", x=-0.16, y=1.02)
 
-    png_output = output_prefix.with_suffix(".png")
-    fig.savefig(png_output, dpi=args.dpi, bbox_inches="tight")
+    fig.savefig(OUTPUT_PATH, dpi=DPI, bbox_inches="tight")
     plt.close(fig)
-
-    bathy_values = np.asarray(bathy)
-    wet = np.isfinite(bathy_values) & (bathy_values < 0)
-    summary = {
-        "run_dir": str(run_dir),
-        "iteration": args.iteration,
-        "k_index": args.k_index,
-        "box_j": args.box_j,
-        "box_i": args.box_i,
-        "bathy_stride": args.bathy_stride,
-        "fine_grid_shape_j_i": [int(grid.sizes["j"]), int(grid.sizes["i"])],
-        "coarse_grid_shape_j_i": [int(coarse_grid.sizes["j"]), int(coarse_grid.sizes["i"])],
-        "physical_extent_km": {
-            "x_min": km_extent_from_grid(grid["XC"], grid["YC"])[0],
-            "x_max": km_extent_from_grid(grid["XC"], grid["YC"])[1],
-            "y_min": km_extent_from_grid(grid["XC"], grid["YC"])[2],
-            "y_max": km_extent_from_grid(grid["XC"], grid["YC"])[3],
-        },
-        "depth_m": {
-            "min_positive": float(np.nanmin(-bathy_values[wet])),
-            "max": float(np.nanmax(-bathy_values[wet])),
-        },
-        "color_limits": {
-            "temperature": [temp_vmin, temp_vmax],
-            "heat_flux_symmetric_wm2": flux_limit,
-        },
-        "bathymetry_box_z0_km": {
-            "x_min": box_extent_km[0],
-            "x_max": box_extent_km[1],
-            "y_min": box_extent_km[2],
-            "y_max": box_extent_km[3],
-            "source": "middle-column northern-half submesoscale heat-flux panel",
-        },
-        "domains": domain_summary,
-        "outputs": [str(png_output)],
-    }
-    with output_prefix.with_suffix(".json").open("w") as handle:
-        json.dump(summary, handle, indent=2)
-        handle.write("\n")
-    return summary
+    print(f"Saved {OUTPUT_PATH}")
 
 
 def main() -> None:
-    args = parse_args()
     apply_style()
-    summary = make_figure(args)
-    for output in summary["outputs"]:
-        print(f"Saved {output}")
-    print(f"Saved {Path(summary['outputs'][0]).with_suffix('.json')}")
+    make_figure()
 
 
 if __name__ == "__main__":
