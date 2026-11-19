@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Plot FK C_e and LfMin sensitivity curves in one simple figure."""
+"""Plot the MLE parameter-tuning results."""
 
 from __future__ import annotations
 
-import argparse
 import csv
 from pathlib import Path
 
@@ -11,15 +10,28 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+TUNING_DIR = PROJECT_ROOT / "analysis/fk_mle/mle_tuning"
+CE_CSV = TUNING_DIR / "Ce_base_case_calculation/ce_random_search_history.csv"
+LFMIN_CSV = TUNING_DIR / "LfMin/lfmin_random_search_history.csv"
+OUTPUT = PROJECT_ROOT / "results/analysis_outputs/mle_parameterization/mle_tuning_history.png"
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ce-csv", type=Path, default=HERE / "Ce_base_case_calculation/ce_random_search_history.csv")
-    parser.add_argument("--lfmin-csv", type=Path, default=HERE / "LfMin_test/lfmin_random_search_history.csv")
-    parser.add_argument("--output", type=Path, default=HERE / "fk_random_search_combined_r2.png")
-    return parser.parse_args()
+mpl.rcParams.update(
+    {
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "sans-serif"],
+        "font.size": 8,
+        "axes.spines.right": False,
+        "axes.spines.top": False,
+        "axes.linewidth": 0.8,
+        "axes.edgecolor": "#777777",
+        "xtick.color": "#333333",
+        "ytick.color": "#333333",
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+    }
+)
 
 
 def read_xy(path: Path, x_key: str) -> tuple[np.ndarray, np.ndarray]:
@@ -35,32 +47,10 @@ def read_xy(path: Path, x_key: str) -> tuple[np.ndarray, np.ndarray]:
     return x_arr[order], y_arr[order]
 
 
-def apply_style() -> None:
-    mpl.rcParams.update(
-        {
-            "font.family": "sans-serif",
-            "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "sans-serif"],
-            "font.size": 8,
-            "axes.spines.right": False,
-            "axes.spines.top": False,
-            "axes.linewidth": 0.8,
-            "axes.edgecolor": "#777777",
-            "xtick.color": "#333333",
-            "ytick.color": "#333333",
-            "xtick.major.width": 0.8,
-            "ytick.major.width": 0.8,
-            "figure.facecolor": "white",
-            "axes.facecolor": "white",
-        }
-    )
-
-
 def main() -> None:
-    args = parse_args()
-    ce, ce_r2 = read_xy(args.ce_csv, "C_e")
-    lfmin, lfmin_r2 = read_xy(args.lfmin_csv, "LfMin")
+    ce, ce_r2 = read_xy(CE_CSV, "C_e")
+    lfmin, lfmin_r2 = read_xy(LFMIN_CSV, "LfMin")
 
-    apply_style()
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.8), sharey=False, constrained_layout=True)
 
     axes[0].scatter(ce, ce_r2, s=26, color="#2C6688", alpha=0.72, linewidths=0, zorder=5)
@@ -85,10 +75,10 @@ def main() -> None:
         ax.grid(axis="y", color="#E5E5E5", linewidth=0.7, zorder=0)
         ax.tick_params(labelsize=8)
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.output, dpi=600, bbox_inches="tight")
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(OUTPUT, dpi=600, bbox_inches="tight")
     plt.close(fig)
-    print(f"Saved {args.output}", flush=True)
+    print(f"Saved {OUTPUT}")
 
 
 if __name__ == "__main__":
