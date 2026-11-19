@@ -3,7 +3,7 @@
 This folder plots the 4 learned bottleneck feature maps saved by the final `model_analysis` evaluation file:
 
 ```text
-analysis/model_analysis/outputs_final/test_predictions_denorm.npz
+results/final_model/test_predictions_denorm.npz
 ```
 
 The script reads the saved `latent_features` array with shape:

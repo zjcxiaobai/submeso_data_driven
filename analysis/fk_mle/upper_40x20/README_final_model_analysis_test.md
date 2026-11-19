@@ -13,7 +13,7 @@ The default FK parameters are `C_e=2.25895966` and `lf_min=1374.0`, matching the
 The script reads:
 
 ```text
-analysis/model_analysis/outputs_final/test_predictions_denorm.npz
+results/final_model/test_predictions_denorm.npz
 analysis/model_analysis/data/time_index.npy
 ```
 

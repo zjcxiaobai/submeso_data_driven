@@ -12,7 +12,7 @@ import numpy as np
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 ANALYSIS_DIR = PROJECT_DIR / "analysis/time_series_r2_fk_submesofluxnet"
-DEFAULT_R2 = PROJECT_DIR / "analysis/model_analysis/outputs_final/test_r2_series.csv"
+DEFAULT_R2 = PROJECT_DIR / "results/final_model/test_r2_series.csv"
 
 PALETTE = {
     "main": "#1F5A85",

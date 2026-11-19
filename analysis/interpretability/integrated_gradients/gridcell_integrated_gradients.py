@@ -140,7 +140,7 @@ def reshape_attribution(attribution: np.ndarray, sequence_length: int, frame_cha
 
 
 DEFAULT_CONFIG = PROJECT_DIR / "analysis/model_analysis/config.yaml"
-DEFAULT_SELECTION = PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz"
+DEFAULT_SELECTION = PROJECT_DIR / "results/final_model/test_predictions_denorm.npz"
 DEFAULT_OUTPUT_DIR = HERE
 
 

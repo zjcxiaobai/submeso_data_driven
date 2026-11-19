@@ -44,14 +44,14 @@ def parse_args() -> argparse.Namespace:
         "--checkpoint",
         type=Path,
         default=None,
-        help="Checkpoint path. Default: analysis/model_analysis/outputs_final/temporal_bottleneck.pt.",
+        help="Checkpoint path. Default: results/final_model/temporal_bottleneck.pt.",
     )
     parser.add_argument("--eval-x", type=Path, default=HERE / "evaluation_subdomain/X.npy")
     parser.add_argument("--eval-y", type=Path, default=HERE / "evaluation_subdomain/y.npy")
     parser.add_argument("--eval-time-index", type=Path, default=HERE / "evaluation_subdomain/time_index.npy")
     parser.add_argument("--stats-x", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/X.npy")
     parser.add_argument("--stats-y", type=Path, default=PROJECT_DIR / "analysis/model_analysis/data/y.npy")
-    parser.add_argument("--stats-path", type=Path, default=PROJECT_DIR / "analysis/model_analysis/outputs_final/norm_stats.npz")
+    parser.add_argument("--stats-path", type=Path, default=PROJECT_DIR / "results/final_model/norm_stats.npz")
     parser.add_argument(
         "--output-prefix",
         type=Path,
@@ -127,7 +127,7 @@ def main() -> None:
         pin_memory=device.type == "cuda",
     )
 
-    checkpoint_path = args.checkpoint or (PROJECT_DIR / "analysis/model_analysis/outputs_final/temporal_bottleneck.pt")
+    checkpoint_path = args.checkpoint or (PROJECT_DIR / "results/final_model/temporal_bottleneck.pt")
     model = build_model(config).to(device)
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state"])

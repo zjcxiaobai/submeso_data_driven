@@ -26,7 +26,7 @@ calculate_fields = source_module.calculate_fields
 
 DEFAULT_X = PROJECT_DIR / "analysis/model_analysis/data/X.npy"
 DEFAULT_TIME_INDEX = PROJECT_DIR / "analysis/model_analysis/data/time_index.npy"
-DEFAULT_PREDICTIONS = PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz"
+DEFAULT_PREDICTIONS = PROJECT_DIR / "results/final_model/test_predictions_denorm.npz"
 DEFAULT_OUTPUT_DIR = HERE / "physics_variables_best_sample"
 
 

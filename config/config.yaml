@@ -43,11 +43,11 @@ train:
   weight_decay: 0.0001
   patience: 40
   loss: huber
-  checkpoint: _src/analysis/model_analysis/outputs_final/temporal_bottleneck.pt
-  history_csv: _src/analysis/model_analysis/outputs_final/history.csv
+  checkpoint: results/model_test/temporal_bottleneck.pt
+  history_csv: results/model_test/history.csv
 output:
-  dir: _src/analysis/model_analysis/outputs_final
-  predictions: _src/analysis/model_analysis/outputs_final/test_predictions_denorm.npz
-  r2_series: _src/analysis/model_analysis/outputs_final/test_r2_series.csv
-  summary: _src/analysis/model_analysis/outputs_final/evaluation_summary.txt
-  stats: _src/analysis/model_analysis/outputs_final/norm_stats.npz
+  dir: results/model_test
+  predictions: results/model_test/test_predictions_denorm.npz
+  r2_series: results/model_test/test_r2_series.csv
+  summary: results/model_test/evaluation_summary.txt
+  stats: results/model_test/norm_stats.npz

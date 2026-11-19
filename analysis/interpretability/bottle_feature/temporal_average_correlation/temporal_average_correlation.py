@@ -19,7 +19,7 @@ HERE = Path(__file__).resolve().parent
 PROJECT_DIR = Path(__file__).resolve().parents[4]
 SOURCE_SCRIPT = PROJECT_DIR / "analysis/explanability/decoder_channel_ablation/model_analysis_last_decoder_pca/prepare_physics_variables.py"
 DEFAULT_X = PROJECT_DIR / "analysis/model_analysis/data/X.npy"
-DEFAULT_PREDICTIONS = PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz"
+DEFAULT_PREDICTIONS = PROJECT_DIR / "results/final_model/test_predictions_denorm.npz"
 DEFAULT_OUTPUT_DIR = HERE / "outputs"
 DEFAULT_CACHE = HERE / "physics_variable_test_series.npz"
 

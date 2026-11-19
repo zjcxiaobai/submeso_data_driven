@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fluxnet-predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "results/final_model/test_predictions_denorm.npz",
     )
     parser.add_argument(
         "--fk-predictions",

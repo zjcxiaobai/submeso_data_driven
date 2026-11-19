@@ -114,6 +114,7 @@ def evaluate(config: dict) -> None:
         "val_mse": val_metrics["mse"],
         "val_mae": val_metrics["mae"],
         "test_r2": float(overall_r2),
+        "mean_snapshot_r2": float(np.mean(sample_r2)),
         "test_mse": float(np.mean(mse)),
         "test_mae": float(np.mean(mae)),
         "latent_feature_shape": list(latent_features.shape),

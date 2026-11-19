@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fluxnet-r2",
         type=Path,
-        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_r2_series.csv",
+        default=PROJECT_DIR / "results/final_model/test_r2_series.csv",
         help="Final SubmesoFluxNet R2 CSV from model_analysis evaluation.",
     )
     parser.add_argument(

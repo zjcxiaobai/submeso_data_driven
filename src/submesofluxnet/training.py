@@ -74,6 +74,8 @@ def train(config: dict) -> None:
     checkpoint_path = PROJECT_ROOT / train_cfg["checkpoint"]
     history_path = PROJECT_ROOT / train_cfg["history_csv"]
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    if history_path.exists():
+        history_path.unlink()
 
     best_val = float("inf")
     stale_epochs = 0

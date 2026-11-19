@@ -185,7 +185,7 @@ def run_case(
     config = load_config(config_path)
     seed_everything(int(config.get("seed", 42)))
     device = get_device(device_override or config.get("device", "auto"))
-    checkpoint_path = PROJECT_DIR / "analysis/model_analysis/outputs_final/temporal_bottleneck.pt"
+    checkpoint_path = PROJECT_DIR / "results/final_model/temporal_bottleneck.pt"
     data_cfg = config["data"]
     output_cfg = config.get("output", {})
     if batch_size is not None:
@@ -197,7 +197,7 @@ def run_case(
     temporal_offsets = [int(v) for v in data_cfg.get("temporal_offsets", [0])]
     x_path = PROJECT_DIR / data_cfg["x_path"]
     y_path = PROJECT_DIR / data_cfg["y_path"]
-    stats_path = PROJECT_DIR / output_cfg.get("stats", "analysis/model_analysis/outputs_final/norm_stats.npz")
+    stats_path = PROJECT_DIR / output_cfg.get("stats", "results/final_model/norm_stats.npz")
     stats = load_stats(stats_path)
     n_samples = np.load(x_path, mmap_mode="r").shape[0]
     _, _, test_block = split_raw_blocks(n_samples, data_cfg["split"])

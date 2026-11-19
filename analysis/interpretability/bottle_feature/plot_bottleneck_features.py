@@ -14,7 +14,7 @@ from matplotlib.colors import TwoSlopeNorm
 
 HERE = Path(__file__).resolve().parent
 PROJECT_DIR = Path(__file__).resolve().parents[3]
-DEFAULT_INPUT = PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz"
+DEFAULT_INPUT = PROJECT_DIR / "results/final_model/test_predictions_denorm.npz"
 DEFAULT_OUTPUT_DIR = HERE
 
 

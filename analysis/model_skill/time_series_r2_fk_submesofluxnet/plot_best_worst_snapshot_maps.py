@@ -38,13 +38,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--predictions",
         type=Path,
-        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_predictions_denorm.npz",
+        default=PROJECT_DIR / "results/final_model/test_predictions_denorm.npz",
         help="NPZ produced by evaluate.py with prediction, target, and sample_index arrays.",
     )
     parser.add_argument(
         "--r2-series",
         type=Path,
-        default=PROJECT_DIR / "analysis/model_analysis/outputs_final/test_r2_series.csv",
+        default=PROJECT_DIR / "results/final_model/test_r2_series.csv",
         help="CSV produced by evaluate.py with per-snapshot R2 values.",
     )
     parser.add_argument(
