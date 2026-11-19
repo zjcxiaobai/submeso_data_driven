@@ -18,7 +18,6 @@ scratch/
 *.pt
 *.pth
 *.pkl
-data/**
 check_point/
 outputs/
 predictions/

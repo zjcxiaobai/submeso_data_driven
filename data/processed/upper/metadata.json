@@ -1,0 +1,50 @@
+{
+  "source_dir": "/scratch/jczhang/submeso_data_driven/src/data/mld_rho_no_speed",
+  "features": [
+    "U",
+    "V",
+    "W",
+    "zeta",
+    "strain",
+    "T",
+    "rho",
+    "kpphbl"
+  ],
+  "target": "wT",
+  "domain": "upper_40x20",
+  "y_start": 30,
+  "y_stop_exclusive": 50,
+  "x_start": 10,
+  "x_stop_exclusive": 50,
+  "final_temporal_offsets": [
+    -5,
+    -4,
+    -3,
+    -2,
+    -1,
+    0
+  ],
+  "final_sequence_length": 6,
+  "final_frame_channels": 8,
+  "final_model_input_channels": 48,
+  "final_model_height": 20,
+  "final_model_width": 40,
+  "shape_X": [
+    11478,
+    8,
+    20,
+    40
+  ],
+  "shape_y": [
+    11478,
+    1,
+    20,
+    40
+  ],
+  "time_count": 11478,
+  "time_start": 6801264,
+  "time_end": 26706096,
+  "valid_center_start_offset": 5,
+  "nan_X": 0,
+  "nan_y": 0
+}
