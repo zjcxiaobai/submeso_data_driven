@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
-
-import argparse
-import csv
 from pathlib import Path
 
 import matplotlib as mpl
@@ -12,121 +8,45 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
-HERE = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+MODEL_PREDICTIONS = PROJECT_ROOT / "results/model/test_predictions_denorm.npz"
+MLE_PREDICTIONS = PROJECT_ROOT / "analysis/fk_mle/tuned_mle_parameterization/mle_prediction_physical.npz"
+OUTPUT = PROJECT_ROOT / "results/analysis_outputs/model_skill/time_mean_skill/time_mean_skill_comparison.png"
+WINDOWS = [1, 2, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 120, 180, 240, 365, 540, 730, 1095]
 
-PALETTE = {
-    "fluxnet": "#1F5A85",
-    "fk": "#B64A3B",
-    "neutral_dark": "#343434",
-    "neutral_mid": "#777777",
-    "neutral_light": "#D6D6D6",
-}
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Compare SubmesoFluxNet and FK skill as a function of temporal averaging window."
-    )
-    parser.add_argument(
-        "--fluxnet-predictions",
-        type=Path,
-        default=PROJECT_DIR / "results/final_model/test_predictions_denorm.npz",
-    )
-    parser.add_argument(
-        "--fk-predictions",
-        type=Path,
-        default=PROJECT_DIR / "analysis/fk_mle/upper_40x20/final_model_analysis_test/fk_prediction_physical.npz",
-    )
-    parser.add_argument("--output-prefix", type=Path, default=HERE / "time_mean_skill_comparison")
-    parser.add_argument("--csv-output", type=Path, default=HERE / "time_mean_skill_comparison.csv")
-    parser.add_argument("--summary-output", type=Path, default=HERE / "time_mean_skill_comparison_summary.txt")
-    parser.add_argument("--fk-display-label", default="MLE parameterization", help="Display label for the FK/MLE baseline in plots and logs.")
-    parser.add_argument(
-        "--windows",
-        type=int,
-        nargs="*",
-        default=[1, 2, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 120, 180, 240, 365, 540, 730, 1095, 1460],
-        help="Averaging windows in snapshots. Defaults assume one saved test snapshot per day.",
-    )
-    return parser.parse_args()
+BLUE = "#1F5A85"
+RED = "#B64A3B"
+GRAY = "#777777"
+LIGHT_GRAY = "#D6D6D6"
 
 
-def apply_style() -> None:
-    mpl.rcParams.update(
-        {
-            "font.family": "sans-serif",
-            "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "sans-serif"],
-            "svg.fonttype": "none",
-            "pdf.fonttype": 42,
-            "font.size": 7,
-            "axes.spines.right": False,
-            "axes.spines.top": False,
-            "axes.linewidth": 0.75,
-            "axes.labelcolor": PALETTE["neutral_dark"],
-            "xtick.color": PALETTE["neutral_dark"],
-            "ytick.color": PALETTE["neutral_dark"],
-            "xtick.major.width": 0.75,
-            "ytick.major.width": 0.75,
-            "xtick.major.size": 2.8,
-            "ytick.major.size": 2.8,
-            "legend.frameon": False,
-            "figure.facecolor": "white",
-            "axes.facecolor": "white",
-        }
-    )
+mpl.rcParams.update(
+    {
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "sans-serif"],
+        "font.size": 7,
+        "axes.spines.right": False,
+        "axes.spines.top": False,
+        "axes.linewidth": 0.75,
+        "legend.frameon": False,
+    }
+)
 
 
-def load_fluxnet(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    if not path.exists():
-        raise FileNotFoundError(f"Missing SubmesoFluxNet predictions: {path}")
-    with np.load(path) as data:
-        required = {"sample_index", "prediction", "target"}
-        missing = required.difference(data.files)
-        if missing:
-            raise ValueError(f"{path} is missing arrays: {sorted(missing)}")
-        sample = np.asarray(data["sample_index"], dtype=np.int64)
-        prediction = np.asarray(data["prediction"], dtype=np.float64)
-        target = np.asarray(data["target"], dtype=np.float64)
-    if prediction.ndim != 4 or prediction.shape[1] != 1:
-        raise ValueError(f"Expected SubmesoFluxNet prediction shape (N,1,H,W), got {prediction.shape}")
-    return sample, prediction[:, 0], target[:, 0]
+def load_data() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    with np.load(MODEL_PREDICTIONS) as data:
+        model_sample = data["sample_index"]
+        model_prediction = data["prediction"][:, 0]
+        target = data["target"][:, 0]
 
+    with np.load(MLE_PREDICTIONS) as data:
+        mle_sample = data["sample_index"]
+        mle_prediction = data["prediction"][:, 0]
 
-def load_fk(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
-    if not path.exists():
-        raise FileNotFoundError(f"Missing FK predictions: {path}")
-    with np.load(path) as data:
-        required = {"sample_index", "prediction"}
-        missing = required.difference(data.files)
-        if missing:
-            raise ValueError(f"{path} is missing arrays: {sorted(missing)}")
-        sample = np.asarray(data["sample_index"], dtype=np.int64)
-        prediction = np.asarray(data["prediction"], dtype=np.float64)
-        time_index = np.asarray(data["time_index"], dtype=np.int64) if "time_index" in data.files else None
-    if prediction.ndim != 4 or prediction.shape[1] != 1:
-        raise ValueError(f"Expected FK prediction shape (N,1,H,W), got {prediction.shape}")
-    return sample, prediction[:, 0], time_index
+    if not np.array_equal(model_sample, mle_sample):
+        raise ValueError("The SubmesoFluxNet and MLE test samples do not match.")
 
-
-def align_to_fluxnet(
-    flux_sample: np.ndarray,
-    flux_prediction: np.ndarray,
-    target: np.ndarray,
-    fk_sample: np.ndarray,
-    fk_prediction: np.ndarray,
-    fk_time_index: np.ndarray | None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
-    if flux_sample.shape != fk_sample.shape or not np.array_equal(flux_sample, fk_sample):
-        flux_set = set(map(int, flux_sample))
-        fk_set = set(map(int, fk_sample))
-        raise ValueError(
-            "SubmesoFluxNet and MLE sample_index values do not match exactly: "
-            f"fluxnet_rows={flux_sample.size}, mle_rows={fk_sample.size}, common={len(flux_set & fk_set)}, "
-            f"first_missing_from_mle={sorted(flux_set - fk_set)[:5]}, "
-            f"first_missing_from_fluxnet={sorted(fk_set - flux_set)[:5]}"
-        )
-    return flux_prediction, target, fk_prediction, fk_time_index
+    return target, model_prediction, mle_prediction
 
 
 def block_average(values: np.ndarray, window: int) -> np.ndarray:
@@ -146,93 +66,53 @@ def r2_score(prediction: np.ndarray, target: np.ndarray) -> float:
     return 1.0 - ss_res / ss_tot
 
 
-def rmse(prediction: np.ndarray, target: np.ndarray) -> float:
-    return float(np.sqrt(np.nanmean((prediction - target) ** 2)))
-
-
-def compute_skill_by_window(
+def calculate_skill(
     target: np.ndarray,
-    flux_prediction: np.ndarray,
-    fk_prediction: np.ndarray,
-    windows: list[int],
-) -> list[dict[str, float | int]]:
-    rows: list[dict[str, float | int]] = []
-    n_time = int(target.shape[0])
-    for window in sorted(set(w for w in windows if w >= 1)):
-        if window > n_time:
-            continue
+    model_prediction: np.ndarray,
+    mle_prediction: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    windows = [window for window in WINDOWS if window <= len(target)]
+    model_r2 = []
+    mle_r2 = []
+
+    for window in windows:
         target_avg = block_average(target, window)
-        flux_avg = block_average(flux_prediction, window)
-        fk_avg = block_average(fk_prediction, window)
-        rows.append(
-            {
-                "window_snapshots": int(window),
-                "n_blocks": int(target_avg.shape[0]),
-                "used_snapshots": int(target_avg.shape[0] * window),
-                "submesofluxnet_r2": r2_score(flux_avg, target_avg),
-                "fk_r2": r2_score(fk_avg, target_avg),
-                "submesofluxnet_rmse": rmse(flux_avg, target_avg),
-                "fk_rmse": rmse(fk_avg, target_avg),
-            }
-        )
-    return rows
+        model_avg = block_average(model_prediction, window)
+        mle_avg = block_average(mle_prediction, window)
+        model_r2.append(r2_score(model_avg, target_avg))
+        mle_r2.append(r2_score(mle_avg, target_avg))
+
+    return np.asarray(windows), np.asarray(model_r2), np.asarray(mle_r2)
 
 
-def write_csv(path: Path, rows: list[dict[str, float | int]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = [
-        "window_snapshots",
-        "n_blocks",
-        "used_snapshots",
-        "submesofluxnet_r2",
-        "fk_r2",
-        "submesofluxnet_rmse",
-        "fk_rmse",
-    ]
-    with path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def save_figure(fig: plt.Figure, output_prefix: Path) -> None:
-    output_prefix.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(Path(f"{output_prefix}.png"), dpi=600, bbox_inches="tight")
-
-
-def draw_figure(rows: list[dict[str, float | int]], output_prefix: Path, fk_label: str = "FK") -> None:
-    apply_style()
-    x = np.asarray([row["window_snapshots"] for row in rows], dtype=np.float64)
-    flux_r2 = np.asarray([row["submesofluxnet_r2"] for row in rows], dtype=np.float64)
-    fk_r2 = np.asarray([row["fk_r2"] for row in rows], dtype=np.float64)
-
+def draw_figure(windows: np.ndarray, model_r2: np.ndarray, mle_r2: np.ndarray) -> None:
     fig, ax = plt.subplots(figsize=(4.9, 2.75), constrained_layout=True)
     ax.plot(
-        x,
-        flux_r2,
-        color=PALETTE["fluxnet"],
+        windows,
+        model_r2,
+        color=BLUE,
         marker="o",
         markersize=3.0,
         linewidth=1.35,
         label="SubmesoFluxNet",
     )
     ax.plot(
-        x,
-        fk_r2,
-        color=PALETTE["fk"],
+        windows,
+        mle_r2,
+        color=RED,
         marker="s",
         markersize=3.0,
         linewidth=1.35,
-        label=fk_label,
+        label="MLE parameterization",
     )
 
     markers = ((30, "Monthly"), (90, "Seasonal"), (365, "Annual"))
-    ymin = min(float(np.nanmin(flux_r2)), float(np.nanmin(fk_r2))) - 0.04
-    ymax = min(1.0, max(float(np.nanmax(flux_r2)), float(np.nanmax(fk_r2))) + 0.08)
+    ymin = min(float(np.nanmin(model_r2)), float(np.nanmin(mle_r2))) - 0.04
+    ymax = min(1.0, max(float(np.nanmax(model_r2)), float(np.nanmax(mle_r2))) + 0.08)
     ax.set_ylim(ymin, ymax)
     for window, label in markers:
-        if x.min() <= window <= x.max():
-            ax.axvline(window, color=PALETTE["neutral_mid"], linewidth=0.65, linestyle=(0, (3, 2)), zorder=0)
+        if windows.min() <= window <= windows.max():
+            ax.axvline(window, color=GRAY, linewidth=0.65, linestyle=(0, (3, 2)), zorder=0)
             ax.text(
                 window,
                 ymax - 0.015,
@@ -241,75 +121,28 @@ def draw_figure(rows: list[dict[str, float | int]], output_prefix: Path, fk_labe
                 ha="right",
                 va="top",
                 fontsize=6.2,
-                color=PALETTE["neutral_dark"],
+                color=GRAY,
             )
 
     ax.set_xscale("log")
-    ax.set_xlim(float(x.min()), float(x.max()))
+    ax.set_xlim(float(windows.min()), float(windows.max()))
     ax.set_xlabel("Averaging window (model days)")
     ax.set_ylabel(r"Time-mean global $R^2$")
-    ax.grid(axis="y", color=PALETTE["neutral_light"], linewidth=0.45, alpha=0.55)
-    ax.spines["left"].set_color(PALETTE["neutral_mid"])
-    ax.spines["bottom"].set_color(PALETTE["neutral_mid"])
+    ax.grid(axis="y", color=LIGHT_GRAY, linewidth=0.45, alpha=0.55)
+    ax.spines["left"].set_color(GRAY)
+    ax.spines["bottom"].set_color(GRAY)
     ax.legend(loc="lower right", fontsize=6.7, handlelength=1.7)
-    save_figure(fig, output_prefix)
+
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(OUTPUT, dpi=600, bbox_inches="tight")
     plt.close(fig)
 
 
-def write_summary(
-    path: Path,
-    rows: list[dict[str, float | int]],
-    n_time: int,
-    time_index: np.ndarray | None,
-) -> None:
-    best_flux = max(rows, key=lambda row: float(row["submesofluxnet_r2"]))
-    best_fk = max(rows, key=lambda row: float(row["fk_r2"]))
-    with path.open("w") as handle:
-        handle.write("Time-mean skill comparison\n")
-        handle.write("metric: global R2 after block averaging prediction and truth over consecutive test snapshots\n")
-        handle.write("window_units: model days, assuming one saved test snapshot per model day\n")
-        handle.write(f"n_aligned_snapshots: {n_time}\n")
-        if time_index is not None and time_index.size > 1:
-            diffs = np.diff(time_index)
-            handle.write(f"time_index_median_spacing: {float(np.median(diffs)):.10g}\n")
-            handle.write(f"time_index_min_spacing: {int(np.min(diffs))}\n")
-            handle.write(f"time_index_max_spacing: {int(np.max(diffs))}\n")
-        handle.write(f"best_submesofluxnet_window: {best_flux['window_snapshots']}\n")
-        handle.write(f"best_submesofluxnet_r2: {float(best_flux['submesofluxnet_r2']):.10g}\n")
-        handle.write(f"best_mle_window: {best_fk['window_snapshots']}\n")
-        handle.write(f"best_mle_r2: {float(best_fk['fk_r2']):.10g}\n")
-        for mark in (30, 90, 365):
-            match = next((row for row in rows if int(row["window_snapshots"]) == mark), None)
-            if match is not None:
-                handle.write(f"\nwindow_{mark}\n")
-                handle.write(f"n_blocks: {match['n_blocks']}\n")
-                handle.write(f"submesofluxnet_r2: {float(match['submesofluxnet_r2']):.10g}\n")
-                handle.write(f"mle_r2: {float(match['fk_r2']):.10g}\n")
-
-
 def main() -> None:
-    args = parse_args()
-    flux_sample, flux_prediction, target = load_fluxnet(args.fluxnet_predictions)
-    fk_sample, fk_prediction, fk_time_index = load_fk(args.fk_predictions)
-    flux_prediction, target, fk_prediction, aligned_time = align_to_fluxnet(
-        flux_sample, flux_prediction, target, fk_sample, fk_prediction, fk_time_index
-    )
-    rows = compute_skill_by_window(target, flux_prediction, fk_prediction, args.windows)
-    write_csv(args.csv_output, rows)
-    write_summary(args.summary_output, rows, int(target.shape[0]), aligned_time)
-    draw_figure(rows, args.output_prefix, args.fk_display_label)
-
-    print(f"Saved {args.output_prefix}.png", flush=True)
-    print(f"Saved {args.csv_output}", flush=True)
-    print(f"Saved {args.summary_output}", flush=True)
-    for row in rows:
-        if int(row["window_snapshots"]) in {30, 90, 365}:
-            print(
-                f"window={row['window_snapshots']}: "
-                f"SubmesoFluxNet R2={float(row['submesofluxnet_r2']):.6f}, "
-                f"{args.fk_display_label} R2={float(row['fk_r2']):.6f}",
-                flush=True,
-            )
+    target, model_prediction, mle_prediction = load_data()
+    windows, model_r2, mle_r2 = calculate_skill(target, model_prediction, mle_prediction)
+    draw_figure(windows, model_r2, mle_r2)
+    print(f"Saved {OUTPUT}")
 
 
 if __name__ == "__main__":
