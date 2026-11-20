@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
 R2_SERIES = HERE / "upper_model_on_lower_40x20_model_analysis_r2_series.csv"
 PREDICTIONS = HERE / "upper_model_on_lower_40x20_model_analysis_predictions_denorm.npz"
-MLE_PREDICTIONS = HERE / "evaluation_subdomain_fk_prediction.npz"
+MLE_PREDICTIONS = HERE / "evaluation_subdomain_mle_prediction.npz"
 UPPER_TRUTH = PROJECT_ROOT / "data/processed/upper/y.npy"
 OUTPUT = PROJECT_ROOT / "results/analysis_outputs/generalization/non_local/evaluation_subdomain_1_year_window.png"
 
