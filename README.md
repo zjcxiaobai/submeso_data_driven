@@ -1,6 +1,6 @@
 # SubmesoFluxNet
 
-SubmesoFluxNet is a PyTorch model for predicting submesoscale vertical heat-flux fields from coarse-resolution ocean-state variables. The repository contains the MITgcm preprocessing workflow, the final spatiotemporal neural network, evaluation utilities, and the analyses used for the accompanying paper.
+SubmesoFluxNet is a PyTorch model for predicting submesoscale vertical heat flux from coarse-resolution ocean-state variables. The repository contains the MITgcm preprocessing workflow, the spatiotemporal neural network, evaluation utilities, and the analyses of the results.
 
 ## Model overview
 
