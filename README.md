@@ -32,7 +32,7 @@ window crosses a training, validation, or test boundary.
 
 ## Model
 
-[View the SubmesoFluxNet model schematic (PDF)](analysis/architecture/SubmesoFluxNet.pdf)
+![SubmesoFluxNet model architecture](analysis/architecture/architecture.png)
 
 Each model sample contains six consecutive snapshots at offsets
 `[-5, -4, -3, -2, -1, 0]`. A snapshot consists of eight mixed-layer fields on a
